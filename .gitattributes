@@ -20,6 +20,9 @@
 *.icns          binary
 *.xcf           binary
 
+# Media as binary
+*.mp4           binary
+
 # Other files as text for diff
 *.md            text
 *.js            text
