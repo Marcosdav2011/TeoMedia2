@@ -84,9 +84,21 @@ export type DiscussionCategory =
   'general' | 'ideas' | 'polls' | 'q-a' | 'translations';
 
 export type Display = Electron.Display & {
+  auxiliaryWindow?: boolean;
+  auxiliaryWindowBounds?: Electron.Rectangle;
+  auxiliaryWindowVisible?: boolean;
+  /**
+   * 1-based position in Electron's raw display order, which follows the
+   * operating system's monitor numbering (primary first). `getAllScreens`
+   * sorts displays geometrically for window placement, so this keeps the
+   * user-facing "Screen N" label aligned with the physical monitors.
+   */
+  displayNumber?: number;
   mainWindow?: boolean;
   mainWindowBounds?: Electron.Rectangle;
   mediaWindow?: boolean;
+  mediaWindowBounds?: Electron.Rectangle;
+  mediaWindowVisible?: boolean;
   timerWindow?: boolean;
 };
 
@@ -246,6 +258,12 @@ export interface ElectronApi {
    * corruption and resolves `false`.
    */
   isSqliteDbCorrupt: (dbPath: string) => Promise<boolean>;
+  /**
+   * True in the silent mirror window TEO opens on the second external
+   * display. That window follows the media but never controls it, so a
+   * duplicated "ended"/"pause" event cannot advance the meeting twice.
+   */
+  isTeoAuxiliaryOutput: boolean;
   isUsablePath: (path: string) => Promise<boolean>;
   join: typeof join;
   launchZoomMeeting: (meetingId: string) => void;
@@ -254,6 +272,10 @@ export interface ElectronApi {
    * stops reporting disk-full errors.
    */
   markUserWarnedAboutDiskSpace: () => void;
+  moveAuxiliaryWindow: (
+    targetScreenNumber?: number,
+    windowedMode?: boolean,
+  ) => void;
   moveMediaWindow: (
     targetScreenNumber?: number,
     windowedMode?: boolean,
@@ -424,6 +446,11 @@ export interface ElectronApi {
   /** The latest timer state, pushed to every open timer page. */
   timerRemoteUpdate: (data: TimerData) => void;
   toggleAuthorizedClose: (authorized: boolean) => void;
+  toggleAuxiliaryWindow: (
+    show: boolean,
+    targetScreenNumber?: number,
+    windowedMode?: boolean,
+  ) => void;
   toggleMediaWindow: (show: boolean, enableFadeTransitions?: boolean) => void;
   toggleTimerWindow: (show: boolean) => void;
   unregisterAllShortcuts: () => void;
@@ -604,6 +631,7 @@ export type ElectronIpcSendKey =
   | 'focusMediaWindow'
   | 'launchZoomMeeting'
   | 'markUserWarnedAboutDiskSpace'
+  | 'moveAuxiliaryWindow'
   | 'moveMediaWindow'
   | 'moveTimerWindow'
   | 'navigateWebsiteWindow'
@@ -619,6 +647,7 @@ export type ElectronIpcSendKey =
   | 'stopZoomHelper'
   | 'timerRemoteText'
   | 'timerRemoteUpdate'
+  | 'toggleAuxiliaryWindow'
   | 'toggleMediaWindow'
   | 'toggleOpenAtLogin'
   | 'toggleTimerWindow'
@@ -656,7 +685,13 @@ export interface ExtractNestedZipEntryOptions {
 }
 
 export type FileDialogFilter =
-  'image' | 'image+pdf' | 'json' | 'jwpub' | 'jwpub+image' | 'jwpub+image+pdf';
+  | 'image'
+  | 'image+pdf'
+  | 'json'
+  | 'jwpub'
+  | 'jwpub+image'
+  | 'jwpub+image+pdf'
+  | 'png';
 
 export interface MacosFolderPermissionResult {
   errorCode?: string;

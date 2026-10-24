@@ -4,26 +4,10 @@
       class="items-center q-pb-lg q-px-lg q-gutter-y-md bg-secondary-contrast"
     >
       <div class="row items-center">
-        <div class="col-shrink q-mr-md">
-          <q-img
-            v-if="isBetaVersion"
-            loading="lazy"
-            src="~assets/img/beta-logo.svg"
-            width="48px"
-          />
-          <q-img
-            v-else
-            loading="lazy"
-            src="~assets/img/logo.svg"
-            width="48px"
-          />
-        </div>
         <div class="col">
-          <div class="row text-h6">
-            {{ t('meeting-media-manager') }}
-          </div>
-          <div class="row items-center">
-            <div class="col">v{{ appVersion }}</div>
+          <TeoBrand tone="light" />
+          <div class="row q-mt-xs text-caption text-grey-7">
+            v{{ appVersion }}
           </div>
         </div>
         <div class="col-shrink">
@@ -179,6 +163,7 @@
 <script setup lang="ts">
 import { watchImmediate, whenever } from '@vueuse/core';
 import BaseDialog from 'components/dialog/BaseDialog.vue';
+import TeoBrand from 'components/teo/TeoBrand.vue';
 import { storeToRefs } from 'pinia';
 import { QCarousel } from 'quasar';
 import { fetchReleaseNotes } from 'src/utils/api';
@@ -213,7 +198,6 @@ const handleHide = () => {
 
 const { locale, t } = useI18n();
 const appVersion = import.meta.env.version;
-const isBetaVersion = import.meta.env.IS_BETA;
 
 const checkLastVersion = async (congId: string) => {
   if (await wasUpdateInstalled(congId)) {

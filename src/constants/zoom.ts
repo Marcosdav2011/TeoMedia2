@@ -1,4 +1,4 @@
-export const MEDIA_WINDOW_TITLE = 'Media Player - M³';
+export const MEDIA_WINDOW_TITLE = 'TM2 · Media Player';
 
 /** The setup assistant's id in the dialog-state store. */
 export const ZOOM_SETUP_ASSISTANT_DIALOG_ID = 'zoom-setup-assistant';

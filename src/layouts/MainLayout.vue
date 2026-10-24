@@ -3,8 +3,8 @@
     <!-- Top bar -->
     <HeaderBase />
 
-    <!-- Side navigation -->
-    <NavDrawer v-model="miniState" />
+    <!-- Keeps TEO's output window active on the chosen screen -->
+    <TeoOutputKeeper />
 
     <!-- Meeting timer, docked at the side (a setting) -->
     <TimerDockPanel
@@ -37,9 +37,7 @@
         currentSettings?.enableMusicButton
       "
       class="q-pb-sm action-island-container"
-      :style="
-        'left: calc(50% + ' + (miniState ? '28' : '150') + 'px) !important'
-      "
+      style="left: 50% !important"
     >
       <ActionIsland />
     </q-footer>
@@ -112,9 +110,9 @@ import DialogZoomSetupAssistant from 'components/dialog/DialogZoomSetupAssistant
 import HeaderBase from 'components/header/HeaderBase.vue';
 import MediaPreview from 'components/media/MediaPreview.vue';
 import TimerDockPanel from 'components/media/TimerDockPanel.vue';
+import TeoOutputKeeper from 'components/teo/TeoOutputKeeper.vue';
 import ActionIsland from 'components/ui/ActionIsland.vue';
 import AnnouncementBanner from 'components/ui/AnnouncementBanner.vue';
-import NavDrawer from 'components/ui/NavDrawer.vue';
 import { storeToRefs } from 'pinia';
 import { useMeta, useQuasar } from 'quasar';
 import { SORTER } from 'src/constants/general';
@@ -187,16 +185,11 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 
-// Local state
-const miniState = ref(true);
-
 // Pause flag for yeartext watcher during preview
 const yeartextWatcherPaused = ref(false);
 
-const productName = import.meta.env.PRODUCT_NAME;
-
 useMeta({
-  titleTemplate: (title) => (title ? `${title} - M³` : `${productName}`),
+  titleTemplate: (title) => (title ? `${title} · TM2` : 'TM2'),
 });
 
 // Icon mapping
@@ -1199,6 +1192,28 @@ const { post: postObsEnabled } = useBroadcastChannel<
   name: 'obs-enabled',
 }); // Send obsEnable to the media player page using useBroadcastChannel
 
+// Push current playback state back to output windows that ask for it, so a
+// window that (re)loads - or the second, auxiliary output - starts showing
+// what is already playing instead of an empty screen.
+const { post: postCurrentMediaUrl } = useBroadcastChannel<string, string>({
+  name: 'media-url',
+});
+
+const { post: postCurrentMediaAction } = useBroadcastChannel<string, string>({
+  name: 'main-window-media-action',
+});
+
+const { post: postCurrentSubtitlesUrl } = useBroadcastChannel<string, string>({
+  name: 'subtitles-url',
+});
+
+const { post: postCurrentSlideshowAudioUrl } = useBroadcastChannel<
+  string,
+  string
+>({
+  name: 'slideshow-audio-url',
+});
+
 const handleAutoUpdatesToggled = (event: Event) => {
   if (!(event as CustomEvent<boolean>).detail) return;
   dismissUpdatesDisabledNotification?.();
@@ -1350,6 +1365,10 @@ watchImmediate(
     if (!yeartextWatcherPaused.value) {
       postYeartext(yeartext.value);
     }
+    postCurrentMediaUrl(mediaPlaying.value.url);
+    postCurrentMediaAction(mediaPlaying.value.action);
+    postCurrentSubtitlesUrl(mediaPlaying.value.subtitlesUrl);
+    postCurrentSlideshowAudioUrl(mediaPlaying.value.slideshowAudioUrl);
   },
 );
 

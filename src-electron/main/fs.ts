@@ -1019,6 +1019,10 @@ export async function saveFileDialog(
     filters.push({ extensions: ['json'], name: 'JSON' });
   }
 
+  if (filter?.includes('png')) {
+    filters.push({ extensions: ['png'], name: 'PNG' });
+  }
+
   if (!filters.length) {
     filters.push({ extensions: ['*'], name: 'All files' });
   }
@@ -1762,7 +1766,10 @@ const openZipInFileRange = (path: string, start: number, size: number) => {
   const reader = new (class extends RandomAccessReader {
     override _readStreamForRange(from: number, to: number) {
       // createReadStream's end is inclusive; yauzl's is not.
-      return createReadStream(path, { end: start + to - 1, start: start + from });
+      return createReadStream(path, {
+        end: start + to - 1,
+        start: start + from,
+      });
     }
   })();
   return fromRandomAccessReaderPromise(reader, size);

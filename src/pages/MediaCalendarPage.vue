@@ -80,6 +80,7 @@
     @dragover="dropActive"
     @dragstart="dropActive"
   >
+    <TeoCalendarHero />
     <div v-if="bannerColumnVisible" class="col">
       <q-slide-transition v-for="b in pageBanners" :key="b.key">
         <div class="row">
@@ -242,6 +243,7 @@ import DialogSectionPicker from 'components/dialog/DialogSectionPicker.vue';
 import EmptyState from 'components/media/EmptyState.vue';
 import MediaList from 'components/media/MediaList.vue';
 import MeetingQuickActionsPanel from 'components/media/MeetingQuickActionsPanel.vue';
+import TeoCalendarHero from 'components/teo/TeoCalendarHero.vue';
 import QuickStartGuide from 'components/ui/QuickStartGuide.vue';
 import DOMPurify from 'dompurify';
 import Mousetrap from 'mousetrap';

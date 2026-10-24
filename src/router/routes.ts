@@ -40,6 +40,11 @@ const routes: RouteRecordRaw[] = [
     title: 'titles.presentWebsite',
   }),
 
+  mainChildRoute('/cameras', 'cameras', 'CamerasPage', {
+    icon: 'mmm-video',
+    title: 'teo-cameras',
+  }),
+
   mainChildRoute(
     '/media-player',
     'media-player',

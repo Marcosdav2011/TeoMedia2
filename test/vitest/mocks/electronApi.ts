@@ -118,6 +118,7 @@ export const electronApi: ElectronApi = {
   isOnline: async () => true,
   isSecretEncryptionAvailableSync: () => true,
   isSqliteDbCorrupt: async () => false,
+  isTeoAuxiliaryOutput: false,
   isUsablePath: async function (path) {
     return true;
   },
@@ -128,6 +129,7 @@ export const electronApi: ElectronApi = {
   markUserWarnedAboutDiskSpace: function () {
     return undefined;
   },
+  moveAuxiliaryWindow: () => undefined,
   moveMediaWindow: function (targetScreenNumber, windowedMode) {
     throw new Error('Function not implemented.');
   },
@@ -282,6 +284,7 @@ export const electronApi: ElectronApi = {
   toggleAuthorizedClose: function () {
     throw new Error('Function not implemented.');
   },
+  toggleAuxiliaryWindow: () => undefined,
   toggleMediaWindow: function (show) {
     throw new Error('Function not implemented.');
   },

@@ -11,7 +11,7 @@
   >
     <!-- Base yeartext layer - always visible with black background -->
     <div
-      v-if="fontsSet && !mediaPlayerCustomBackground && !cameraStreamId"
+      v-if="fontsSet && !mediaPlayerCustomBackground && !activeCameraStreamId"
       class="base-layer"
       :class="{ 'blank-screen': isTransitioning }"
     >
@@ -35,7 +35,7 @@
 
     <!-- Custom background layer - always visible when set -->
     <div
-      v-if="mediaPlayerCustomBackground && !cameraStreamId"
+      v-if="mediaPlayerCustomBackground && !activeCameraStreamId"
       class="base-layer"
       :class="{ 'blank-screen': isTransitioning }"
     >
@@ -48,7 +48,7 @@
     </div>
 
     <!-- Camera background layer -->
-    <div v-if="cameraStreamId" class="camera-layer">
+    <div v-if="activeCameraStreamId" class="camera-layer">
       <video
         ref="cameraElement"
         autoplay
@@ -67,7 +67,7 @@
       }"
     >
       <q-img
-        v-if="isImage(displayLayer1.url)"
+        v-if="isImage(displayLayer1.url) || isImageString(displayLayer1.url)"
         id="mediaImage1"
         class="fit-snugly"
         fit="contain"
@@ -120,7 +120,7 @@
       }"
     >
       <q-img
-        v-if="isImage(displayLayer2.url)"
+        v-if="isImage(displayLayer2.url) || isImageString(displayLayer2.url)"
         id="mediaImage2"
         class="fit-snugly"
         fit="contain"
@@ -170,6 +170,11 @@
       style="display: none"
       @loadedmetadata="playSlideshowAudio()"
     />
+
+    <div v-if="screenIdentifyText" class="screen-identify-layer">
+      <div class="screen-identify-brand">TM2</div>
+      <div class="screen-identify-label">{{ screenIdentifyText }}</div>
+    </div>
   </q-page-container>
 </template>
 
@@ -200,6 +205,11 @@ import {
   type ZoomPanTransform,
 } from 'src/helpers/media-window-zoom-pan';
 import { createTemporaryNotification } from 'src/helpers/notifications';
+import {
+  TEO_CAMERA_CHANNEL,
+  TEO_SCREEN_IDENTIFY_CHANNEL,
+  type TeoScreenIdentifyMessage,
+} from 'src/helpers/teo-outputs';
 import { log } from 'src/shared/vanilla';
 import { sleep } from 'src/utils/general';
 import { mmmIconMapFn } from 'src/utils/icon-map';
@@ -207,6 +217,7 @@ import {
   isAudio,
   isExpectedMediaAccessError,
   isImage,
+  isImageString,
   isVideo,
   stopMediaStreamTracks,
 } from 'src/utils/media';
@@ -227,6 +238,10 @@ const { sanitize } = DOMPurify;
 const { t } = useI18n();
 
 const { getScreenAccessStatus, PLATFORM } = globalThis.electronApi;
+
+// Second, silent output on the other external screen. It follows media and
+// camera changes, but must never feed control/end events back to the app.
+const isAuxiliaryOutput = globalThis.electronApi.isTeoAuxiliaryOutput === true;
 
 const $q = useQuasar();
 
@@ -534,9 +549,35 @@ const { data: webStreamData } = useBroadcastChannel<
   name: 'web-stream',
 });
 
+// TEO camera only: MMM's own `camera-stream` (displayCameraId, sign-language
+// camera) must not replace the yeartext unless the user assigns a camera here.
 const { data: cameraStreamId } = useBroadcastChannel<string, string>({
-  name: 'camera-stream',
+  name: TEO_CAMERA_CHANNEL,
 });
+
+// Only the primary output opens the capture device; two windows asking for
+// the same camera would fail or steal it from each other.
+const activeCameraStreamId = computed(() =>
+  isAuxiliaryOutput ? '' : cameraStreamId.value,
+);
+
+const { data: teoScreenIdentify } = useBroadcastChannel<
+  TeoScreenIdentifyMessage,
+  TeoScreenIdentifyMessage
+>({
+  name: TEO_SCREEN_IDENTIFY_CHANNEL,
+});
+
+const screenIdentifyText = ref('');
+let screenIdentifyTimer: ReturnType<typeof setTimeout> | undefined;
+
+const clearScreenIdentify = () => {
+  if (screenIdentifyTimer) {
+    clearTimeout(screenIdentifyTimer);
+    screenIdentifyTimer = undefined;
+  }
+  screenIdentifyText.value = '';
+};
 
 const { post: postLastEndTimestamp } = useBroadcastChannel<number, number>({
   name: 'last-end-timestamp',
@@ -773,7 +814,7 @@ const endOrLoop = () => {
     }
   } else {
     log('🎬 [endOrLoop] Posting ended state', 'mediaPlayer', 'log');
-    postLastEndTimestamp(Date.now());
+    if (!isAuxiliaryOutput) postLastEndTimestamp(Date.now());
     // Don't clear mediaCustomDuration immediately to avoid race condition
     // It will be cleared when the media state is handled by the main window
   }
@@ -837,11 +878,12 @@ const handleMediaError = (layer: 1 | 2) => {
   // existing end-of-media handling (MediaCalendarPage.vue's
   // lastEndTimestamp watcher) takes over instead of the display staying
   // stuck expecting content that will never arrive.
-  postLastEndTimestamp(Date.now());
+  if (!isAuxiliaryOutput) postLastEndTimestamp(Date.now());
 };
 
 const handleVideoPause = () => {
   log('⏸️ [handleVideoPause] Video paused', 'mediaPlayer', 'log');
+  if (isAuxiliaryOutput) return;
   try {
     postCurrentTime(currentMediaElement.value?.currentTime ?? 0);
   } catch (e) {
@@ -908,7 +950,9 @@ const playMedia = () => {
     // that fails to report a real duration) - consumers (the media preview's
     // progress bar) treat 0 as "unknown" already.
     const { duration } = currentMediaElement.value;
-    postDuration(Number.isFinite(duration) ? duration : 0);
+    if (!isAuxiliaryOutput) {
+      postDuration(Number.isFinite(duration) ? duration : 0);
+    }
 
     let lastUpdate = 0;
     const updateInterval = fadeOutDurationInMilliseconds;
@@ -925,7 +969,7 @@ const playMedia = () => {
       if (Date.now() - lastUpdate > updateInterval) {
         // Throttle time updates
         try {
-          postCurrentTime(currentTime);
+          if (!isAuxiliaryOutput) postCurrentTime(currentTime);
           lastUpdate = Date.now();
         } catch (e) {
           // The BroadcastChannel can close mid-flight if this window is
@@ -1324,7 +1368,7 @@ const clearWebsiteStream = () => {
   // deliberate teardown instead of reported as a real playback failure -
   // see the UX-11 note above elementsBeingCleanedUp.
   cleanupMediaElement(currentMediaElement.value);
-  postMediaPlayingAction('');
+  if (!isAuxiliaryOutput) postMediaPlayingAction('');
   displayLayer1.value.isLive = false;
   displayLayer1.value.url = '';
 };
@@ -1344,7 +1388,7 @@ const resetFailedWebsiteStream = (
   // whatever's currently attached to the element below.
   stopMediaStreamTracks(stream);
   videoStreaming.value = false;
-  postMediaPlayingAction('');
+  if (!isAuxiliaryOutput) postMediaPlayingAction('');
   cleanupMediaElement(currentMediaElement.value);
 };
 
@@ -1357,7 +1401,8 @@ const shouldClearWebsiteStream = (
     oldWebStreamData === 'previewingWebsite');
 
 const startWebsiteMirrorStream = async () => {
-  if (cameraStreamId.value) cameraStreamId.value = '';
+  if (isAuxiliaryOutput) return;
+  if (activeCameraStreamId.value) cameraStreamId.value = '';
 
   displayLayer1.value.isLive = true;
   displayLayer1.value.url = '';
@@ -1559,6 +1604,10 @@ watchDeep(
 watch(
   () => webStreamData.value,
   async (newWebStreamData, oldWebStreamData) => {
+    if (isAuxiliaryOutput) {
+      videoStreaming.value = false;
+      return;
+    }
     videoStreaming.value = newWebStreamData === 'mirroringWebsite';
     if (newWebStreamData !== 'mirroringWebsite') {
       if (shouldClearWebsiteStream(newWebStreamData, oldWebStreamData)) {
@@ -1571,8 +1620,40 @@ watch(
   },
 );
 
+watch(
+  () => teoScreenIdentify.value,
+  (message) => {
+    if (isAuxiliaryOutput) return;
+    const label = message?.label ?? '';
+    if (!label) {
+      clearScreenIdentify();
+      return;
+    }
+
+    if (screenIdentifyTimer) {
+      clearTimeout(screenIdentifyTimer);
+      screenIdentifyTimer = undefined;
+    }
+
+    screenIdentifyText.value = label;
+    screenIdentifyTimer = setTimeout(() => {
+      screenIdentifyText.value = '';
+      screenIdentifyTimer = undefined;
+    }, 6000);
+  },
+);
+
+// Identification is a black full-screen layer; never let it cover media or a
+// camera that starts while the number is still showing.
+watch(
+  () => mediaPlayingUrl.value || activeCameraStreamId.value,
+  (active) => {
+    if (active) clearScreenIdentify();
+  },
+);
+
 watchImmediate(
-  () => cameraStreamId.value,
+  () => activeCameraStreamId.value,
   async (deviceId) => {
     log(
       `🎬 [cameraStreamId] Watcher triggered. DeviceId: ${deviceId}`,
@@ -1688,6 +1769,10 @@ watchImmediate(
 
 onMounted(() => {
   postGetCurrentState(Date.now().toString());
+  // The yeartext base layer is gated on fontsSet. If the main window has no
+  // changed values to report, the watcher above never runs loadFonts() and
+  // the text would stay hidden for the whole session.
+  void loadFonts();
 });
 
 onBeforeUnmount(() => {
@@ -1700,6 +1785,7 @@ onBeforeUnmount(() => {
   cleanupMediaElement(mediaElement2.value);
   cleanupMediaElement(cameraElement.value);
   stopZoomPanAnimation();
+  if (screenIdentifyTimer) clearTimeout(screenIdentifyTimer);
 });
 </script>
 
@@ -1758,5 +1844,34 @@ onBeforeUnmount(() => {
 .display-layer.is-audio {
   background-color: green;
   opacity: 0;
+}
+
+.screen-identify-layer {
+  align-items: center;
+  background-color: black;
+  display: flex;
+  flex-direction: column;
+  gap: 2vh;
+  inset: 0;
+  justify-content: center;
+  position: absolute;
+  text-align: center;
+  z-index: 100;
+}
+
+.screen-identify-brand {
+  color: var(--q-primary);
+  font-size: clamp(0.8rem, 2.2vw, 1.8rem);
+  font-weight: 600;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+}
+
+.screen-identify-label {
+  color: white;
+  font-size: clamp(3rem, 12vw, 11rem);
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: pre-line;
 }
 </style>

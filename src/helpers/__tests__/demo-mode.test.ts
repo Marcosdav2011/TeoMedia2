@@ -19,6 +19,7 @@ import {
   jumpToLastSong,
   jumpToPreMeeting,
   removeDemoCongregationData,
+  repairSeededDemoMedia,
   resetDemo,
   seedDemoData,
 } from '../demo-mode';
@@ -208,6 +209,57 @@ describe('demo meeting-stage transitions', () => {
     expect(jwStore.lookupPeriod[demoId]).toBeUndefined();
     expect(currentState.currentCongregation).toBe('');
     expect(getSeededDemoCongregationId()).toBe('');
+  });
+
+  it('repairs sample videos seeded without a playable file', async () => {
+    seedDemoData();
+    const demoId = getSeededDemoCongregationId();
+    const congregationSettings = useCongregationSettingsStore();
+    const jwStore = useJwStore();
+    const items =
+      jwStore.lookupPeriod[demoId]?.[0]?.mediaSections?.flatMap(
+        (section) => section.items ?? [],
+      ) ?? [];
+    const video = items.find((item) => item.title === 'Sample TGW song');
+    const photo = items.find((item) => item.title === 'Sample TGW photo');
+    expect(video?.fileUrl).toBe('demo/teo-demo-video.mp4');
+
+    // An older seeded profile has the same items with no file at all.
+    if (video) video.fileUrl = undefined;
+    repairSeededDemoMedia();
+
+    expect(video?.fileUrl).toBe('demo/teo-demo-video.mp4');
+    expect(photo?.fileUrl).toMatch(/^data:image/);
+
+    // Real congregations are never touched, even with a matching title.
+    const realId = congregationSettings.createCongregation();
+    const realVideo = {
+      duration: 60,
+      fileUrl: undefined as string | undefined,
+      isImage: false,
+      title: 'Sample TGW song',
+      type: 'media' as const,
+      uniqueId: 'real-video',
+    };
+    jwStore.lookupPeriod[realId] = [
+      {
+        date: TODAY,
+        mediaSections: [
+          {
+            config: { uniqueId: 'tgw' },
+            items: [realVideo],
+          },
+        ],
+        status: 'complete',
+      } as unknown as DateInfo,
+    ];
+
+    repairSeededDemoMedia();
+
+    expect(realVideo.fileUrl).toBeUndefined();
+
+    // Clears the module-level seeded id for the tests that follow.
+    await removeDemoCongregationData();
   });
 
   it('does not remove anything when no demo congregation was seeded', async () => {

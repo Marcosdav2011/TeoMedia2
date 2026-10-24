@@ -16,7 +16,7 @@ void initializeElectronApi('TimerLayout');
 
 useMeta({
   title: 'Timer',
-  titleTemplate: (title) => `${title} - M³`,
+  titleTemplate: (title) => `${title} · TM2`,
 });
 
 onMounted(() => {

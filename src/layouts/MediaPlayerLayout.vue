@@ -16,7 +16,7 @@ void initializeElectronApi('MediaPlayerLayout');
 
 useMeta({
   title: 'Media Player',
-  titleTemplate: (title) => `${title} - M³`,
+  titleTemplate: (title) => `${title} · TM2`,
 });
 
 onMounted(() => {

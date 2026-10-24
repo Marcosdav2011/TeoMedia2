@@ -3,6 +3,10 @@ import type { Display } from 'src/types/electron';
 import { app, type BrowserWindow, screen } from 'electron';
 import { getDisplayMatchingSafe } from 'src-electron/main/screen-utils';
 import { captureElectronError } from 'src-electron/main/utils';
+import {
+  auxiliaryWindowInfo,
+  moveAuxiliaryWindowThrottled,
+} from 'src-electron/main/window/window-auxiliary';
 import { mainWindowInfo } from 'src-electron/main/window/window-main';
 import {
   mediaWindowInfo,
@@ -24,6 +28,7 @@ const onDisplayChanged = () => {
   try {
     moveMediaWindowThrottled();
     moveTimerWindowThrottled();
+    moveAuxiliaryWindowThrottled();
   } catch (e) {
     captureElectronError(e, {
       contexts: { fn: { name: 'onDisplayChanged' } },
@@ -134,9 +139,19 @@ export const getAllScreens = (): Display[] => {
     return screensSnapshot.displays;
   }
 
-  const displays: Display[] = screen
-    .getAllDisplays()
-    .sort((a, b) => a.bounds.x + a.bounds.y - (b.bounds.x + b.bounds.y));
+  const rawDisplays = screen.getAllDisplays();
+  // Capture the OS display order (primary first) before sorting, so the
+  // renderer can label "Screen 2" after the physical monitor 2 even though
+  // window placement uses the left-to-right order below.
+  const displayNumbers = new Map(
+    rawDisplays.map((display, index) => [display.id, index + 1]),
+  );
+  const displays: Display[] = rawDisplays
+    .sort((a, b) => a.bounds.x + a.bounds.y - (b.bounds.x + b.bounds.y))
+    .map((display) => ({
+      ...display,
+      displayNumber: displayNumbers.get(display.id),
+    }));
 
   const mainWindowDisplayId = getDisplayIdForWindow(mainWindowInfo.mainWindow);
   const mediaWindowDisplayId = getDisplayIdForWindow(
@@ -145,6 +160,11 @@ export const getAllScreens = (): Display[] => {
   const timerWindowDisplayId = getDisplayIdForWindow(
     timerWindowInfo.timerWindow,
   );
+  const auxiliaryWindow = auxiliaryWindowInfo.auxiliaryWindow;
+  const auxiliaryWindowDisplayId =
+    auxiliaryWindow?.isVisible() === true
+      ? getDisplayIdForWindow(auxiliaryWindow)
+      : undefined;
 
   for (const display of displays) {
     if (
@@ -168,6 +188,17 @@ export const getAllScreens = (): Display[] => {
       display.id === mediaWindowDisplayId
     ) {
       display.mediaWindow = true;
+      display.mediaWindowVisible =
+        mediaWindowInfo.mediaWindow?.isVisible() === true;
+      try {
+        display.mediaWindowBounds = mediaWindowInfo.mediaWindow?.getBounds();
+      } catch (e) {
+        captureElectronError(e, {
+          contexts: {
+            fn: { name: 'getAllScreens', window: 'mediaWindowBounds' },
+          },
+        });
+      }
     }
 
     if (
@@ -175,6 +206,23 @@ export const getAllScreens = (): Display[] => {
       display.id === timerWindowDisplayId
     ) {
       display.timerWindow = true;
+    }
+
+    if (
+      auxiliaryWindowDisplayId !== undefined &&
+      display.id === auxiliaryWindowDisplayId
+    ) {
+      display.auxiliaryWindow = true;
+      display.auxiliaryWindowVisible = true;
+      try {
+        display.auxiliaryWindowBounds = auxiliaryWindow?.getBounds();
+      } catch (e) {
+        captureElectronError(e, {
+          contexts: {
+            fn: { name: 'getAllScreens', window: 'auxiliaryWindowBounds' },
+          },
+        });
+      }
     }
   }
 

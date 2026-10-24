@@ -7,6 +7,7 @@ import {
   setShouldQuit,
 } from 'src-electron/main/session';
 import { captureElectronError } from 'src-electron/main/utils';
+import { createAuxiliaryWindow } from 'src-electron/main/window/window-auxiliary';
 import {
   closeOtherWindows,
   createWindow,
@@ -94,6 +95,7 @@ export function createMainWindow() {
     });
 
     createMediaWindow();
+    createAuxiliaryWindow();
   } finally {
     isCreatingMainWindow = false;
   }

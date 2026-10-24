@@ -4,6 +4,7 @@ const getAllWindows = vi.fn();
 const createWindow = vi.fn();
 const closeOtherWindows = vi.fn();
 const sendToWindow = vi.fn();
+const createAuxiliaryWindow = vi.fn();
 const createMediaWindow = vi.fn();
 const cancelAllDownloads = vi.fn();
 const setAppQuitting = vi.fn();
@@ -40,6 +41,10 @@ vi.mock('src-electron/main/window/window-base', () => ({
   closeOtherWindows,
   createWindow,
   sendToWindow,
+}));
+
+vi.mock('src-electron/main/window/window-auxiliary', () => ({
+  createAuxiliaryWindow,
 }));
 
 vi.mock('src-electron/main/window/window-media', () => ({

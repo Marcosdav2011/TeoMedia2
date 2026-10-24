@@ -1,4 +1,4 @@
-import { seedDemoData } from 'src/helpers/demo-mode';
+import { repairSeededDemoMedia, seedDemoData } from 'src/helpers/demo-mode';
 import { createTemporaryNotification } from 'src/helpers/notifications';
 import { useCongregationSettingsStore } from 'stores/congregation-settings';
 import { useDemoModeStore } from 'stores/demo-mode';
@@ -12,6 +12,11 @@ export default defineBoot(() => {
     seedDemoData();
     return;
   }
+
+  // A profile can keep the sample congregation from an earlier build, whose
+  // sample videos had no playable file. Repair those items in place instead
+  // of reseeding, which would replace every configured congregation.
+  repairSeededDemoMedia();
 
   // Dev-build convenience only: offer to seed the demo congregation so a
   // fresh checkout has meeting-day data to test against immediately, without

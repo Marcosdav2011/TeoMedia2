@@ -66,6 +66,14 @@ const DEMO_SECTION_ITEMS: Partial<Record<string, DemoItemSeed[]>> = {
   ],
 };
 
+const DEMO_VIDEO_TITLES = new Set(
+  Object.values(DEMO_SECTION_ITEMS).flatMap((items) =>
+    (items ?? [])
+      .filter((item) => item.duration !== undefined)
+      .map((item) => item.title),
+  ),
+);
+
 // Demonstrates a collapsed media group (e.g. a multi-image jwpub extract) —
 // cbs:false + a non-empty children array + extractCaption is what
 // useMediaSection.ts reads to render a group starting collapsed.
@@ -81,6 +89,11 @@ const getWeekDay = (offset = 0): SettingsValues['mwDay'] => {
   const isoDay = day === 0 ? 6 : day - 1; // Monday=0 .. Sunday=6
   return String((isoDay + offset) % 7) as SettingsValues['mwDay'];
 };
+
+// Relative on purpose: the media window runs from the built index.html in
+// production and from the dev server in development, and resolves this
+// public-folder asset against its own document URL in both cases.
+const DEMO_VIDEO_URL = 'demo/teo-demo-video.mp4';
 
 const buildDemoDateInfo = (
   jwStore: ReturnType<typeof useJwStore>,
@@ -105,12 +118,12 @@ const buildDemoDateInfo = (
     if (!items) return;
     section.items = items.map(({ duration, hue, tag, title }): MediaItem => {
       // Images use fileUrl for display (that's the file itself); videos use
-      // thumbnailUrl and get a duration for the runtime overlay.
+      // thumbnailUrl for the thumbnail and a bundled clip for playback.
       const isImage = duration === undefined;
       const thumbnail = demoThumbnail(hue);
       return {
         duration,
-        fileUrl: isImage ? thumbnail : undefined,
+        fileUrl: isImage ? thumbnail : DEMO_VIDEO_URL,
         isImage,
         tag,
         thumbnailUrl: isImage ? undefined : thumbnail,
@@ -158,6 +171,42 @@ let seededCongregationId = '';
 
 /** The congregation id created by the most recent seedDemoData() call. */
 export const getSeededDemoCongregationId = () => seededCongregationId;
+
+/**
+ * Gives the bundled demo clip to sample videos seeded before they had one.
+ * A profile can keep the sample congregation created by an earlier build,
+ * whose video items have no file at all, so pressing play did nothing. Only
+ * sample items that still have no URL of any kind are touched (matched by
+ * the seeded titles inside the sample congregation), so real media is never
+ * changed.
+ */
+export const repairSeededDemoMedia = () => {
+  const congregationSettingsStore = useCongregationSettingsStore();
+  const jwStore = useJwStore();
+
+  Object.entries(congregationSettingsStore.congregations)
+    .filter(
+      ([, settings]) =>
+        settings?.congregationName === 'Sample Congregation' &&
+        settings.congregationNameModified,
+    )
+    .forEach(([congregationId]) => {
+      jwStore.lookupPeriod[congregationId]?.forEach((day) => {
+        day.mediaSections?.forEach((section) => {
+          section.items?.forEach((item) => {
+            if (
+              !item.isImage &&
+              !item.fileUrl &&
+              !item.streamUrl &&
+              DEMO_VIDEO_TITLES.has(item.title)
+            ) {
+              item.fileUrl = DEMO_VIDEO_URL;
+            }
+          });
+        });
+      });
+    });
+};
 
 export const seedDemoData = () => {
   const congregationSettingsStore = useCongregationSettingsStore();

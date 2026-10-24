@@ -107,6 +107,10 @@ import {
   getChallengeHost,
   passWafChallenge,
 } from 'src-electron/main/waf-challenge';
+import {
+  setAuxiliaryWindowPosition,
+  toggleAuxiliaryWindow,
+} from 'src-electron/main/window/window-auxiliary';
 import { logToWindow } from 'src-electron/main/window/window-base';
 import {
   focusMainWindow,
@@ -239,6 +243,17 @@ handleIpcSendSync('decryptSecretSync', (_e, cipherText: string) =>
 handleIpcSendSync('isSecretEncryptionAvailableSync', () =>
   isSecretEncryptionAvailable(),
 );
+
+handleIpcSend(
+  'toggleAuxiliaryWindow',
+  async (_e, show: boolean, displayNr?: number) => {
+    await toggleAuxiliaryWindow(show, displayNr);
+  },
+);
+
+handleIpcSend('moveAuxiliaryWindow', async (_e, displayNr?: number) => {
+  await setAuxiliaryWindowPosition(displayNr);
+});
 
 handleIpcSend(
   'toggleMediaWindow',

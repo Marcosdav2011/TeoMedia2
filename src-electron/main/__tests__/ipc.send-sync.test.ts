@@ -66,6 +66,10 @@ vi.mock('src-electron/main/timer-remote', () => ({}));
 vi.mock('src-electron/main/updater', () => ({}));
 vi.mock('src-electron/main/waf-challenge', () => ({}));
 vi.mock('src-electron/main/window/window-media', () => ({}));
+vi.mock('src-electron/main/window/window-auxiliary', () => ({
+  setAuxiliaryWindowPosition: vi.fn(),
+  toggleAuxiliaryWindow: vi.fn(),
+}));
 vi.mock('src-electron/main/window/window-timer', () => ({}));
 vi.mock('src-electron/main/window/window-website', () => ({
   askForMediaAccess: vi.fn(),

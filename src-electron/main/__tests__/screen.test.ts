@@ -8,8 +8,18 @@ const getDisplayMatching = vi.fn();
 const captureElectronError = vi.fn();
 const moveMediaWindowThrottled = vi.fn();
 const moveTimerWindowThrottled = vi.fn();
+const moveAuxiliaryWindowThrottled = vi.fn();
 
-const { mainWindowInfo, mediaWindowInfo, timerWindowInfo } = vi.hoisted(() => ({
+const {
+  auxiliaryWindowInfo,
+  mainWindowInfo,
+  mediaWindowInfo,
+  timerWindowInfo,
+} = vi.hoisted(() => ({
+  auxiliaryWindowInfo: {
+    auxiliaryWindow: null as FakeWindow | null,
+    lastDisplayNr: undefined as number | undefined,
+  },
   mainWindowInfo: { mainWindow: null as FakeWindow | null },
   mediaWindowInfo: { mediaWindow: null as FakeWindow | null },
   timerWindowInfo: { timerWindow: null as FakeWindow | null },
@@ -18,11 +28,13 @@ const { mainWindowInfo, mediaWindowInfo, timerWindowInfo } = vi.hoisted(() => ({
 interface FakeWindow {
   getBounds: ReturnType<typeof vi.fn>;
   isDestroyed: ReturnType<typeof vi.fn>;
+  isVisible: ReturnType<typeof vi.fn>;
 }
 
 const makeWindow = (bounds: Electron.Rectangle): FakeWindow => ({
   getBounds: vi.fn(() => bounds),
   isDestroyed: vi.fn(() => false),
+  isVisible: vi.fn(() => true),
 });
 
 const boundsAt = (x: number, width = 1920, height = 1080) => ({
@@ -55,6 +67,11 @@ vi.mock('src-electron/main/window/window-main', () => ({
 vi.mock('src-electron/main/window/window-media', () => ({
   mediaWindowInfo,
   moveMediaWindowThrottled,
+}));
+
+vi.mock('src-electron/main/window/window-auxiliary', () => ({
+  auxiliaryWindowInfo,
+  moveAuxiliaryWindowThrottled,
 }));
 
 vi.mock('src-electron/main/window/window-timer', () => ({
@@ -90,6 +107,7 @@ describe('screen listeners', () => {
 
     expect(moveMediaWindowThrottled).toHaveBeenCalledOnce();
     expect(moveTimerWindowThrottled).toHaveBeenCalledOnce();
+    expect(moveAuxiliaryWindowThrottled).toHaveBeenCalledOnce();
     expect(captureElectronError).not.toHaveBeenCalled();
   });
 
@@ -110,6 +128,7 @@ describe('getAllScreens', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    auxiliaryWindowInfo.auxiliaryWindow = null;
     mainWindowInfo.mainWindow = null;
     mediaWindowInfo.mediaWindow = null;
     timerWindowInfo.timerWindow = null;
@@ -147,7 +166,42 @@ describe('getAllScreens', () => {
     expect(screens[0]?.mainWindow).toBe(true);
     expect(screens[0]?.mainWindowBounds).toEqual(boundsAt(0, 1000, 600));
     expect(screens[1]?.mediaWindow).toBe(true);
+    expect(screens[1]?.mediaWindowVisible).toBe(true);
+    expect(screens[1]?.mediaWindowBounds).toEqual(boundsAt(1920));
     expect(screens[1]?.timerWindow).toBe(true);
+  });
+
+  it('reports a hidden media window as not visible', async () => {
+    getAllDisplays.mockReturnValue([{ bounds: boundsAt(0), id: 1 }]);
+    getDisplayMatching.mockReturnValue({ id: 1 });
+
+    const hidden = makeWindow(boundsAt(0));
+    hidden.isVisible.mockReturnValue(false);
+    mediaWindowInfo.mediaWindow = hidden;
+
+    const { getAllScreens } = await import('../screen');
+
+    const screens = getAllScreens();
+    expect(screens[0]?.mediaWindow).toBe(true);
+    expect(screens[0]?.mediaWindowVisible).toBe(false);
+  });
+
+  it('marks the display containing the visible auxiliary output', async () => {
+    getAllDisplays.mockReturnValue([
+      { bounds: boundsAt(0), id: 1 },
+      { bounds: boundsAt(1920), id: 2 },
+    ]);
+    getDisplayMatching.mockImplementation((rect: Electron.Rectangle) => ({
+      id: rect.x >= 1920 ? 2 : 1,
+    }));
+    auxiliaryWindowInfo.auxiliaryWindow = makeWindow(boundsAt(1920));
+
+    const { getAllScreens } = await import('../screen');
+
+    const screens = getAllScreens();
+    expect(screens[1]?.auxiliaryWindow).toBe(true);
+    expect(screens[1]?.auxiliaryWindowVisible).toBe(true);
+    expect(screens[1]?.auxiliaryWindowBounds).toEqual(boundsAt(1920));
   });
 
   it('calls getDisplayMatching once per window, not once per display', async () => {
@@ -233,6 +287,7 @@ describe('getWindowScreen', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    auxiliaryWindowInfo.auxiliaryWindow = null;
     mainWindowInfo.mainWindow = null;
     mediaWindowInfo.mediaWindow = null;
     timerWindowInfo.timerWindow = null;

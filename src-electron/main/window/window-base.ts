@@ -44,7 +44,7 @@ export function closeOtherWindows(source: BrowserWindow) {
  * @returns The created window
  */
 export function createWindow(
-  name: 'main' | 'media' | 'timer' | 'website' = 'main',
+  name: 'auxiliary' | 'main' | 'media' | 'timer' | 'website' = 'main',
   options?: BrowserWindowConstructorOptions,
   websiteParams?: JwSiteParams,
 ) {
@@ -86,7 +86,7 @@ export function createWindow(
 
   // Show the window when it's ready
   win.on('ready-to-show', () => {
-    if (name === 'media') return;
+    if (name === 'auxiliary' || name === 'media') return;
     if (name === 'timer') {
       win.showInactive();
       return;
@@ -107,6 +107,7 @@ export function createWindow(
     ? 'media-calendar/initial'
     : 'initial-congregation-selector';
   switch (name) {
+    case 'auxiliary':
     case 'media':
       page = 'media-player';
       break;
@@ -154,7 +155,7 @@ export function createWindow(
 }
 
 export async function loadWindowPrefs(
-  windowName: 'main' | 'media' | 'timer',
+  windowName: 'auxiliary' | 'main' | 'media' | 'timer',
 ): Promise<null | WindowState> {
   const configFileName = `${windowName}-window-state.json`;
   const userDataPath = app.getPath('userData');
