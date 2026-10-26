@@ -591,6 +591,10 @@ const {
 } = storeToRefs(currentState);
 const { getInvalidSettings } = currentState;
 
+// Camera-only profiles don't fetch, download or play meeting media, so the
+// whole media settings category is hidden from them.
+const cameraOnlyMode = computed(() => !!currentSettings.value?.cameraOnlyMode);
+
 const jwStore = useJwStore();
 const { updateJwLanguages, updateYeartext } = jwStore;
 const { jwLanguages } = storeToRefs(jwStore);
@@ -693,13 +697,23 @@ const activeGroupData = computed<SettingsGroup | undefined>(
 // When searching, every category with a match is shown flattened in the
 // detail pane (grouped under its own header); otherwise, only the active
 // category's settings are shown.
-const groupsToRender = computed<[SettingsGroupKey, SettingsGroup][]>(() =>
-  filterActive.value
-    ? settingsGroupsEntries.filter(([groupId]) => hasVisibleSettings(groupId))
-    : settingsGroupsEntries.filter(
-        ([groupId]) => groupId === activeGroup.value,
-      ),
-);
+const groupsToRender = computed<[SettingsGroupKey, SettingsGroup][]>(() => {
+  if (filterActive.value) {
+    return settingsGroupsEntries.filter(([groupId]) =>
+      hasVisibleSettings(groupId),
+    );
+  }
+
+  // The remembered category can be one that camera-only mode hides (e.g.
+  // media retrieval); fall back to the first category that still has items.
+  const groupIdToRender = hasVisibleSettings(activeGroup.value)
+    ? activeGroup.value
+    : visibleGroupKeys.value[0];
+
+  return settingsGroupsEntries.filter(
+    ([groupId]) => groupId === groupIdToRender,
+  );
+});
 
 const invalidSettingsByGroup = computed(() => {
   const result: Partial<Record<SettingsGroupKey, number>> = {};
@@ -944,6 +958,9 @@ const shouldShowSetting = (
 ): boolean => {
   if (item.hidden) return false;
   if (item.platforms && !item.platforms.includes(PLATFORM)) return false;
+
+  if (cameraOnlyMode.value && item.group === 'mediaRetrievalPlayback')
+    return false;
 
   // Pinyin settings are only available when congregation language is CHS
   if (

@@ -73,7 +73,10 @@
                   {{ prefs.congregationName || t('noName') }}
                 </div>
                 <div class="row text-caption text-dark-grey">
-                  <template v-if="prefs.disableMediaFetching">
+                  <template v-if="prefs.cameraOnlyMode">
+                    {{ t('teo-camera-only') }}
+                  </template>
+                  <template v-else-if="prefs.disableMediaFetching">
                     {{ t('no-regular-meetings') }}
                   </template>
                   <template
@@ -430,6 +433,8 @@ async function chooseCongregation(
         await router.push('/setup-wizard');
       } else if (invalidSettingsConfigured) {
         await router.push('/settings');
+      } else if (currentSettings.value?.cameraOnlyMode) {
+        await router.push('/cameras');
       } else {
         await router.push('/media-calendar/initial');
       }
@@ -440,7 +445,9 @@ async function chooseCongregation(
     errorCatcher(error);
     congregationSwitcherOpen.value = false;
     congregationIdPendingNavigation.value = undefined;
-    void router.push('/media-calendar');
+    void router.push(
+      currentSettings.value?.cameraOnlyMode ? '/cameras' : '/media-calendar',
+    );
   } finally {
     isSwitchingCongregation.value = false;
   }

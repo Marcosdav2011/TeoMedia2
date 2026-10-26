@@ -48,6 +48,7 @@ export const FEATURE_NUDGES: FeatureNudge[] = [
     id: 'schedule-sync',
     isEligible: ({ online, settings }) =>
       settings.congregationNameModified &&
+      !settings.cameraOnlyMode &&
       !settings.disableMediaFetching &&
       online,
     title: 'feature-nudge-schedule-sync-title',
@@ -120,6 +121,7 @@ export const FEATURE_NUDGES: FeatureNudge[] = [
     isEligible: ({ lowDiskSpace, online, settings }) =>
       !settings.enableExtraCache &&
       settings.enableMediaDisplayButton &&
+      !settings.cameraOnlyMode &&
       !settings.disableMediaFetching &&
       !settings.meteredConnection &&
       !lowDiskSpace &&

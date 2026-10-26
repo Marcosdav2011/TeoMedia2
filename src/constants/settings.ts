@@ -46,6 +46,11 @@ export const settingsGroups: SettingsGroups = {
 
 export const settingsDefinitions: SettingsItems = {
   // App
+  cameraOnlyMode: {
+    group: 'app',
+    subgroup: 'interfaceDisplay',
+    type: 'toggle',
+  },
   localAppLang: {
     group: 'app',
     list: 'appLanguages',
@@ -1095,6 +1100,7 @@ export const defaultSettings: SettingsValues = {
   baseUrl: 'jw.org',
   beginPlaybackPaused: false,
   cacheFolder: null,
+  cameraOnlyMode: false,
   compactAddMediaButton: true,
   congregationName: null,
   congregationNameModified: true,

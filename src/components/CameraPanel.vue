@@ -145,6 +145,7 @@
         @click="captureSnapshot"
       />
       <q-btn
+        v-if="!cameraOnlyMode"
         class="teo-camera-actions__btn"
         flat
         icon="mmm-media-display-inactive"
@@ -204,6 +205,12 @@ interface CameraOption {
 const { t } = useI18n();
 const currentState = useCurrentStateStore();
 const teoCamera = useTeoCameraStore();
+
+// Media playback is not part of a camera-only profile, so the control that
+// switches the output back to the media display is hidden there.
+const cameraOnlyMode = computed(
+  () => !!currentState.currentSettings?.cameraOnlyMode,
+);
 
 const {
   activateOutput,

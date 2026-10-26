@@ -13,6 +13,7 @@ import {
   getSpecificWeekday,
   isInPast,
 } from 'src/utils/date';
+import { meetingMediaDisabled } from 'src/utils/media-mode';
 import { useCurrentStateStore } from 'stores/current-state';
 import { useJwStore } from 'stores/jw';
 
@@ -100,7 +101,7 @@ export const isReplacedByMemorial = (lookupDate?: Date) => {
   try {
     const currentState = useCurrentStateStore();
     const jwStore = useJwStore();
-    if (!lookupDate || currentState.currentSettings?.disableMediaFetching) {
+    if (!lookupDate || meetingMediaDisabled(currentState.currentSettings)) {
       return false;
     }
 
@@ -136,7 +137,7 @@ export const isMemorialDay = (lookupDate?: Date | string) => {
     const currentState = useCurrentStateStore();
     if (
       !lookupDate ||
-      currentState.currentSettings?.disableMediaFetching ||
+      meetingMediaDisabled(currentState.currentSettings) ||
       !currentState.currentSettings?.memorialDate
     ) {
       return false;
@@ -157,7 +158,7 @@ export const isMemorialDay = (lookupDate?: Date | string) => {
 export const isMwMeetingDay = (lookupDate?: Date) => {
   try {
     const currentState = useCurrentStateStore();
-    if (!lookupDate || currentState.currentSettings?.disableMediaFetching) {
+    if (!lookupDate || meetingMediaDisabled(currentState.currentSettings)) {
       return false;
     }
 
@@ -187,7 +188,7 @@ export const isMwMeetingDay = (lookupDate?: Date) => {
 export const isWeMeetingDay = (lookupDate?: Date) => {
   try {
     const currentState = useCurrentStateStore();
-    if (!lookupDate || currentState.currentSettings?.disableMediaFetching) {
+    if (!lookupDate || meetingMediaDisabled(currentState.currentSettings)) {
       return false;
     }
 
@@ -211,7 +212,7 @@ export const isWeMeetingDay = (lookupDate?: Date) => {
 export const isMeetingDay = (lookupDate?: Date) => {
   try {
     const currentState = useCurrentStateStore();
-    if (!lookupDate || currentState.currentSettings?.disableMediaFetching) {
+    if (!lookupDate || meetingMediaDisabled(currentState.currentSettings)) {
       return false;
     }
     return isMwMeetingDay(lookupDate) || isWeMeetingDay(lookupDate);

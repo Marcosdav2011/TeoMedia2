@@ -236,6 +236,7 @@ export interface SettingsValues {
   baseUrl: string;
   beginPlaybackPaused: boolean;
   cacheFolder: null | string;
+  cameraOnlyMode: boolean;
   compactAddMediaButton: boolean;
   congregationName: null | string;
   congregationNameModified: boolean;

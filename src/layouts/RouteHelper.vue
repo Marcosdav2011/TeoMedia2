@@ -38,10 +38,13 @@ onBeforeMount(() => {
     // underneath it instead of pushing to a route that no longer exists.
     if (param === 'initial-congregation-selector') {
       currentState.openCongregationSwitcher({ isBootstrap: true });
+      const landingPath = currentState.currentSettings?.cameraOnlyMode
+        ? '/cameras'
+        : '/media-calendar';
       if (router) {
-        void router.push({ path: '/media-calendar' });
+        void router.push({ path: landingPath });
       } else {
-        location.hash = '/media-calendar';
+        location.hash = landingPath;
       }
       return;
     }

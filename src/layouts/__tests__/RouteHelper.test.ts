@@ -1,6 +1,8 @@
 import { mount } from '@vue/test-utils';
 import { installQuasarPlugin } from 'app/test/vitest/helpers/install-quasar-plugin';
 import { createPinia, setActivePinia } from 'pinia';
+import { defaultSettings } from 'src/constants/settings';
+import { useCongregationSettingsStore } from 'stores/congregation-settings';
 import { useCurrentStateStore } from 'stores/current-state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,6 +51,30 @@ describe('RouteHelper', () => {
     expect(currentState.congregationSwitcherOpen).toBe(true);
     expect(currentState.congregationSwitcherBootstrap).toBe(true);
     expect(location.hash).toBe('#/media-calendar');
+
+    warnSpy.mockRestore();
+  });
+
+  it('lands on /cameras for camera-only profiles', () => {
+    history.replaceState(
+      null,
+      '',
+      `${baseUrl}?page=initial-congregation-selector`,
+    );
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+
+    const congregationSettings = useCongregationSettingsStore();
+    congregationSettings.congregations['abc'] = {
+      ...defaultSettings,
+      cameraOnlyMode: true,
+    };
+    const currentState = useCurrentStateStore();
+    currentState.currentCongregation = 'abc';
+
+    expect(() => mount(RouteHelper)).not.toThrow();
+    expect(location.hash).toBe('#/cameras');
 
     warnSpy.mockRestore();
   });

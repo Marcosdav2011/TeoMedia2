@@ -1,5 +1,5 @@
 <template>
-  <q-page class="teo-page">
+  <q-page class="teo-page" :class="{ 'teo-page--camera-only': cameraOnlyMode }">
     <section class="teo-hero">
       <div class="teo-hero__body">
         <div class="teo-eyebrow">
@@ -9,6 +9,12 @@
         <h1 class="teo-hero__title">{{ t('teo-cameras-and-screens') }}</h1>
         <p class="teo-hero__subtitle">{{ t('teo-cameras-subtitle') }}</p>
         <div class="teo-hero__chips">
+          <span class="teo-chip" :class="{ 'teo-chip--live': cameraOnlyMode }">
+            <q-icon name="mmm-video" size="15px" />
+            {{
+              cameraOnlyMode ? t('teo-camera-only') : t('teo-media-and-cameras')
+            }}
+          </span>
           <span class="teo-chip teo-chip--live">
             <span class="teo-chip__dot" />
             {{ outputLabel }}
@@ -109,11 +115,19 @@ const cameraLabel = computed(() =>
 );
 
 const mediaIsPlaying = computed(() => currentState.mediaIsPlaying);
+
+const cameraOnlyMode = computed(
+  () => !!currentState.currentSettings?.cameraOnlyMode,
+);
 </script>
 
 <style scoped>
 .teo-page {
   padding-bottom: 104px;
+}
+
+.teo-page--camera-only {
+  padding-bottom: 32px;
 }
 
 .teo-cameras__actions {

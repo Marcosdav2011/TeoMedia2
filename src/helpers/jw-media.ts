@@ -96,6 +96,7 @@ import {
   isSong,
   isVideo,
 } from 'src/utils/media';
+import { meetingMediaDisabled } from 'src/utils/media-mode';
 import { createQueue } from 'src/utils/queue';
 import {
   addFullFilePathToMultimediaItem,
@@ -2057,7 +2058,7 @@ export const fetchMedia = async () => {
 
     if (
       !currentStateStore.currentCongregation ||
-      !!currentStateStore.currentSettings?.disableMediaFetching
+      meetingMediaDisabled(currentStateStore.currentSettings)
     ) {
       log(
         '⏭️ Media fetching disabled or no congregation',
@@ -6019,6 +6020,7 @@ export const downloadSongbookVideos = () => {
   try {
     const currentStateStore = useCurrentStateStore();
     if (
+      meetingMediaDisabled(currentStateStore.currentSettings) ||
       !currentStateStore.currentSongbook ||
       !currentStateStore.currentSettings?.lang ||
       !currentStateStore.currentSettings?.enableExtraCache

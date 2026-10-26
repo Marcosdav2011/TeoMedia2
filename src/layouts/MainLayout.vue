@@ -28,13 +28,14 @@
       <router-view />
     </q-page-container>
 
-    <MediaPreview />
+    <MediaPreview v-if="!cameraOnlyMode" />
 
     <!-- Footer -->
     <q-footer
       v-if="
-        currentSettings?.enableMediaDisplayButton ||
-        currentSettings?.enableMusicButton
+        !cameraOnlyMode &&
+        (currentSettings?.enableMediaDisplayButton ||
+          currentSettings?.enableMusicButton)
       "
       class="q-pb-sm action-island-container"
       style="left: 50% !important"
@@ -181,9 +182,10 @@ import { fetchYeartext } from 'src/utils/api';
 import { formatDate, getSpecificWeekday, isInPast } from 'src/utils/date';
 import { kebabToCamelCase } from 'src/utils/general';
 import { mmmIconMapFn } from 'src/utils/icon-map';
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { meetingMediaDisabled } from 'src/utils/media-mode';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 // Pause flag for yeartext watcher during preview
 const yeartextWatcherPaused = ref(false);
@@ -199,6 +201,7 @@ $q.iconMapFn = mmmIconMapFn;
 
 // Routes and translations
 const router = useRouter();
+const route = useRoute();
 const { locale, t } = useI18n({ useScope: 'global' });
 
 // Store initializations
@@ -222,6 +225,10 @@ const {
   selectedDayMeetingType,
   yeartext,
 } = storeToRefs(currentState);
+
+// Camera-only profiles hide the meeting media side completely: no calendar,
+// downloads or website, and no meeting fetch queue in the background.
+const cameraOnlyMode = computed(() => !!currentSettings.value?.cameraOnlyMode);
 
 const jwStore = useJwStore();
 
@@ -746,7 +753,7 @@ bcClose.onmessage = (event) => {
     if (
       (mediaIsPlaying.value ||
         (currentCongregation.value && // a congregation is selected
-          !currentSettings.value?.disableMediaFetching && // media fetching is enabled
+          !meetingMediaDisabled(currentSettings.value) && // media is in use
           meetingDay && // today is a meeting day
           remainingTimeBeforeMeetingStart() < 90)) && // meeting is starting in less than 90 seconds
       closeAttempts.value === 0
@@ -1372,6 +1379,21 @@ watchImmediate(
   },
 );
 
+watch(
+  () => [cameraOnlyMode.value, route.path] as const,
+  ([onlyCameras, path]) => {
+    if (
+      onlyCameras &&
+      ['/media-calendar', '/media-player', '/present-website'].some((prefix) =>
+        path.startsWith(prefix),
+      )
+    ) {
+      void router.replace('/cameras');
+    }
+  },
+  { immediate: true },
+);
+
 watch(currentCongregation, async (newCongregation, oldCongregation) => {
   try {
     //
@@ -1420,9 +1442,10 @@ watch(currentCongregation, async (newCongregation, oldCongregation) => {
     clearMeetingCheckStatusPruneTimers();
     meetingCheckStatus.value = {};
 
-    const scheduleChanged = !!(await syncMeetingSchedule());
+    const scheduleChanged =
+      !cameraOnlyMode.value && !!(await syncMeetingSchedule());
 
-    if (!scheduleChanged) updateLookupPeriod();
+    if (!cameraOnlyMode.value && !scheduleChanged) updateLookupPeriod();
     delayedCacheClear();
 
     // On macOS, a custom cacheFolder (e.g. under ~/Documents) can lose TCC
@@ -1433,7 +1456,7 @@ watch(currentCongregation, async (newCongregation, oldCongregation) => {
     // access is already granted, so this adds no latency in the common case.
     await checkMacosProfileFolderPermissions();
 
-    if (queues.meetings[newCongregation]) {
+    if (!cameraOnlyMode.value && queues.meetings[newCongregation]) {
       log(
         `▶️ Starting meeting fetch queue for congregation switch: ${newCongregation}`,
         'mediaFetching',
@@ -1562,7 +1585,7 @@ watch(online, (isNowOnline) => {
         '🌐 Online: starting active congregation meeting queue',
         'mediaFetching',
       );
-      meetingQueue?.start();
+      if (!cameraOnlyMode.value) meetingQueue?.start();
       void jwStore.updateYeartext({
         isSignLanguage: currentLangObject.value?.isSignLanguage,
         lang: currentSettings.value?.lang,
@@ -1713,6 +1736,7 @@ watch(
     currentSettings.value?.meetingScheduleChangeOnce,
     currentSettings.value?.meetingScheduleChangeMwDay,
     currentSettings.value?.meetingScheduleChangeWeDay,
+    currentSettings.value?.cameraOnlyMode,
     currentSettings.value?.disableMediaFetching,
     currentSettings.value?.excludeFootnotes,
     currentSettings.value?.excludeWtParagraphVideos,
@@ -1731,7 +1755,7 @@ watch(
         (newSetting, index) => newSetting !== oldSettings[index],
       );
 
-      if (settingsChanged) {
+      if (settingsChanged && !cameraOnlyMode.value) {
         log(
           '⚙️ Settings changed (congregation unchanged), updating lookup period',
           'mainLayout',

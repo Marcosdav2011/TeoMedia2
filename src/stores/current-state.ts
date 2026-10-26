@@ -326,8 +326,10 @@ export const useCurrentStateStore = defineStore('current-state', {
       if (isEmpty(settingValue)) {
         const isSkipRule =
           settingsDefinition.rules?.includes('regular') &&
-          congregationSettingsStore.congregations[congregation]
-            ?.disableMediaFetching;
+          (congregationSettingsStore.congregations[congregation]
+            ?.disableMediaFetching ||
+            congregationSettingsStore.congregations[congregation]
+              ?.cameraOnlyMode);
 
         if (!isSkipRule) {
           return true;

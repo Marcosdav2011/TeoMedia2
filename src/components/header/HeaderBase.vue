@@ -35,6 +35,12 @@
       <div class="teo-header__spacer" />
 
       <div class="teo-header__status">
+        <q-badge v-if="cameraOnlyMode" class="teo-mode-badge" outline>
+          <q-icon class="q-mr-xs" name="mmm-video" size="xs" />
+          <span class="no-wrap">{{ t('teo-camera-only') }}</span>
+          <q-tooltip :delay="500">{{ t('cameraOnlyMode-explain') }}</q-tooltip>
+        </q-badge>
+
         <q-badge
           v-if="showDemoBadge"
           class="teo-demo-badge"
@@ -190,36 +196,49 @@ const requiresCongregation = computed(
   () => !currentSettings.value || currentState.invalidSettings(),
 );
 
-const tabs = computed<TeoTab[]>(() => [
-  {
-    active: route.path.startsWith('/media-calendar'),
-    disabled: requiresCongregation.value,
-    icon: 'mmm-media',
-    label: t('teo-nav-meeting'),
-    path: '/media-calendar',
-  },
-  {
-    active: route.path.startsWith('/cameras'),
-    disabled: requiresCongregation.value,
-    icon: 'mmm-video',
-    label: t('teo-nav-cameras'),
-    path: '/cameras',
-  },
-  {
-    active: route.path.startsWith('/present-website'),
-    disabled: requiresCongregation.value,
-    icon: 'mmm-open-web',
-    label: t('teo-nav-website'),
-    path: '/present-website',
-  },
-  {
-    active: route.path.startsWith('/settings'),
-    disabled: !currentSettings.value || route.fullPath.includes('wizard'),
-    icon: 'mmm-settings',
-    label: t('teo-nav-settings'),
-    path: '/settings',
-  },
-]);
+// Camera-only profiles deliberately hide the meeting media and website sides;
+// only the live studio and settings stay reachable.
+const cameraOnlyMode = computed(() => !!currentSettings.value?.cameraOnlyMode);
+
+const tabs = computed<TeoTab[]>(() => {
+  const allTabs: TeoTab[] = [
+    {
+      active: route.path.startsWith('/media-calendar'),
+      disabled: requiresCongregation.value,
+      icon: 'mmm-media',
+      label: t('teo-nav-meeting'),
+      path: '/media-calendar',
+    },
+    {
+      active: route.path.startsWith('/cameras'),
+      disabled: requiresCongregation.value,
+      icon: 'mmm-video',
+      label: t('teo-nav-cameras'),
+      path: '/cameras',
+    },
+    {
+      active: route.path.startsWith('/present-website'),
+      disabled: requiresCongregation.value,
+      icon: 'mmm-open-web',
+      label: t('teo-nav-website'),
+      path: '/present-website',
+    },
+    {
+      active: route.path.startsWith('/settings'),
+      disabled: !currentSettings.value || route.fullPath.includes('wizard'),
+      icon: 'mmm-settings',
+      label: t('teo-nav-settings'),
+      path: '/settings',
+    },
+  ];
+
+  if (!cameraOnlyMode.value) return allTabs;
+
+  return allTabs.filter(
+    (tab) =>
+      tab.path.startsWith('/cameras') || tab.path.startsWith('/settings'),
+  );
+});
 
 const aboutModal = ref(false);
 const dialogId = 'about-dialog';
@@ -356,6 +375,15 @@ onBeforeUnmount(() => {
 
 .teo-demo-badge {
   font-size: 0.68rem;
+}
+
+.teo-mode-badge {
+  background: rgba(94, 234, 212, 0.1);
+  border: 1px solid rgba(94, 234, 212, 0.35);
+  color: #99f6e4;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .teo-header__nav {
