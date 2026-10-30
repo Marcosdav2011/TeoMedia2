@@ -215,7 +215,9 @@ export default defineConfig((ctx) => {
           useZip: true,
         },
         productName: PRODUCT_NAME,
-        publish: ['github'],
+        // TM2 ships outside the upstream release feed: no update provider,
+        // so a build can never install Meeting Media Manager over itself.
+        publish: null,
         win: {
           // The Zoom Meeting Manager's UI Automation helper, compiled at
           // runtime by Windows PowerShell. An absolute path: a relative one

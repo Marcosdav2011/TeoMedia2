@@ -8,7 +8,7 @@ import { app } from 'electron';
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
 import { pathExists } from 'fs-extra/esm';
-import { IS_TEST } from 'src-electron/constants';
+import { IS_TEST, UPDATES_DISABLED } from 'src-electron/constants';
 import { isDownloadErrorExpected } from 'src-electron/main/downloads';
 import { getAppDataPath } from 'src-electron/main/fs';
 import {
@@ -216,6 +216,7 @@ const reportUpdaterError = async (error: Error, message?: string) => {
 };
 
 export async function initUpdater() {
+  if (UPDATES_DISABLED) return; // TM2 has no update channel of its own
   if (await pathExists(await getUpdatesDisabledPath())) return; // Skip updater if updates are disabled by user
   if (isPortable()) return; // Skip updater for portable version
 
@@ -298,6 +299,8 @@ export async function initUpdater() {
 }
 
 export const triggerUpdateCheck = async (attempt = 1) => {
+  if (UPDATES_DISABLED) return;
+
   if (await pathExists(await getUpdatesDisabledPath())) {
     return;
   }
