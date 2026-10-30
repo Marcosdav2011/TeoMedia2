@@ -20,6 +20,9 @@
 *.icns          binary
 *.xcf           binary
 
+# Documents as binary
+*.pdf           binary
+
 # Media as binary
 *.mp4           binary
 

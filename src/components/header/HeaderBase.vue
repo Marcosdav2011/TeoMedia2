@@ -255,13 +255,22 @@ const tabs = computed<TeoTab[]>(() => {
       label: t('teo-nav-settings'),
       path: '/settings',
     },
+    {
+      active: route.path.startsWith('/help'),
+      disabled: false,
+      icon: 'mmm-guide',
+      label: t('teo-nav-help'),
+      path: '/help',
+    },
   ];
 
   if (!cameraOnlyMode.value) return allTabs;
 
   return allTabs.filter(
     (tab) =>
-      tab.path.startsWith('/cameras') || tab.path.startsWith('/settings'),
+      tab.path.startsWith('/cameras') ||
+      tab.path.startsWith('/settings') ||
+      tab.path.startsWith('/help'),
   );
 });
 

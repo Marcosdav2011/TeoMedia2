@@ -45,6 +45,11 @@ const routes: RouteRecordRaw[] = [
     title: 'teo-cameras',
   }),
 
+  mainChildRoute('/help', 'help', 'HelpPage', {
+    icon: 'mmm-guide',
+    title: 'teo-nav-help',
+  }),
+
   mainChildRoute(
     '/media-player',
     'media-player',
