@@ -41,7 +41,26 @@ vi.mock('src/helpers/date', () => dateMocks);
 vi.mock('@sentry/vue', () => sentryMocks);
 
 vi.mock('stores/current-state', () => ({
-  useCurrentStateStore: () => ({ currentSettings }),
+  useCurrentStateStore: () => ({
+    currentSettings,
+    get mediaIsPlaying() {
+      return mediaIsPlaying;
+    },
+  }),
+}));
+
+let mediaIsPlaying = false;
+
+const teoCameraState = { activeCameraId: null as null | string };
+
+vi.mock('stores/teo-camera', () => ({
+  useTeoCameraStore: () => teoCameraState,
+}));
+
+const teoCaptureState = { activeSourceId: '' };
+
+vi.mock('stores/teo-capture', () => ({
+  useTeoCaptureStore: () => teoCaptureState,
 }));
 
 const zoomState = {
@@ -118,6 +137,9 @@ beforeEach(() => {
   meetingFound = true;
   zoomSharing = false;
   failing = {};
+  mediaIsPlaying = false;
+  teoCameraState.activeCameraId = null;
+  teoCaptureState.activeSourceId = '';
   dateMocks.getMeetingStartToday.mockReturnValue(null);
   dateMocks.isMemorialDay.mockReturnValue(false);
   zoomState.meeting = null;
@@ -127,6 +149,7 @@ beforeEach(() => {
   zoomState.runLabel = null;
   Object.assign(currentSettings, {
     zoomMeetingManagerAutoLaunchMeeting: false,
+    zoomMeetingManagerAutomateMediaSharing: false,
     zoomMeetingManagerAutomateMeetingAudioSettings: false,
     zoomMeetingManagerAutomatePostMeetingAudioSettings: false,
     zoomMeetingManagerPostMeetingAskToUnmute: true,
@@ -955,6 +978,92 @@ describe('stopping Zoom sharing after media', () => {
     stopZoomSharingAfterMedia();
     await Promise.resolve();
     expect(commandTypes()).not.toContain('stop-share');
+  });
+});
+
+describe('sharing the output between media and a camera', () => {
+  const enableAutomation = () =>
+    Object.assign(currentSettings, {
+      zoomMeetingManagerAutomateMediaSharing: true,
+    });
+
+  it('starts sharing when a camera takes the output', async () => {
+    enableAutomation();
+    teoCameraState.activeCameraId = 'camera-1';
+    const { syncZoomOutputSharing } = await import('../zoom');
+
+    expect(await syncZoomOutputSharing()).toBe(true);
+
+    expect(commandTypes()).toEqual(['meeting', 'start-share']);
+  });
+
+  it('keeps the same share as media replaces the camera and ends', async () => {
+    enableAutomation();
+    teoCameraState.activeCameraId = 'camera-1';
+    const {
+      automateZoomMediaSharing,
+      stopZoomSharingAfterMedia,
+      syncZoomOutputSharing,
+    } = await import('../zoom');
+    await syncZoomOutputSharing();
+
+    mediaIsPlaying = true;
+    await automateZoomMediaSharing(true);
+    mediaIsPlaying = false;
+    stopZoomSharingAfterMedia();
+
+    expect(commandTypes()).toEqual(['meeting', 'start-share', 'meeting']);
+    expect(zoomSharing).toBe(true);
+  });
+
+  it('stops sharing once the camera leaves and no media is playing', async () => {
+    enableAutomation();
+    teoCameraState.activeCameraId = 'camera-1';
+    const { syncZoomOutputSharing } = await import('../zoom');
+    await syncZoomOutputSharing();
+
+    teoCameraState.activeCameraId = null;
+    expect(await syncZoomOutputSharing()).toBe(true);
+
+    expect(commandTypes()).toEqual([
+      'meeting',
+      'start-share',
+      'meeting',
+      'stop-share',
+    ]);
+    expect(zoomSharing).toBe(false);
+  });
+
+  it('shares the output while a window capture runs', async () => {
+    enableAutomation();
+    teoCaptureState.activeSourceId = 'screen:0:0';
+    const { syncZoomOutputSharing } = await import('../zoom');
+
+    expect(await syncZoomOutputSharing()).toBe(true);
+
+    expect(commandTypes()).toEqual(['meeting', 'start-share']);
+  });
+
+  it('keeps sharing after media ends while a window capture runs', async () => {
+    enableAutomation();
+    teoCaptureState.activeSourceId = 'screen:0:0';
+    const { automateZoomMediaSharing, stopZoomSharingAfterMedia } =
+      await import('../zoom');
+    await automateZoomMediaSharing(true);
+
+    stopZoomSharingAfterMedia();
+    await Promise.resolve();
+
+    expect(zoomSharing).toBe(true);
+  });
+
+  it('leaves Zoom alone when the automation is off', async () => {
+    teoCameraState.activeCameraId = 'camera-1';
+    const { syncZoomOutputSharing } = await import('../zoom');
+
+    expect(await syncZoomOutputSharing()).toBeUndefined();
+
+    expect(commandTypes()).toEqual([]);
   });
 });
 

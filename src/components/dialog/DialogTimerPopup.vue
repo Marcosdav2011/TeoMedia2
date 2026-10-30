@@ -381,6 +381,55 @@
       />
     </div>
 
+    <!-- Speaker monitor: ad-hoc message and time-of-day clock -->
+    <q-separator class="bg-accent-200 q-my-sm" />
+    <p class="card-section-title text-dark-grey q-px-md q-pt-sm">
+      {{ t('speaker-monitor') }}
+    </p>
+    <div class="column q-gutter-sm q-px-md q-pb-sm">
+      <q-input
+        v-model="speakerNoticeDraft"
+        dense
+        :label="t('speaker-notice')"
+        maxlength="200"
+        outlined
+        @keyup.enter="applySpeakerNotice"
+      />
+      <div class="row q-col-gutter-sm">
+        <div class="col">
+          <q-btn
+            class="full-width"
+            color="primary"
+            :disable="!speakerNoticeDraft.trim()"
+            icon="mmm-send"
+            :label="t('speaker-notice-show')"
+            no-caps
+            outline
+            @click="applySpeakerNotice"
+          />
+        </div>
+        <div class="col">
+          <q-btn
+            class="full-width"
+            color="negative"
+            :disable="!speakerNotice"
+            icon="mmm-delete"
+            :label="t('speaker-notice-clear')"
+            no-caps
+            outline
+            @click="clearSpeakerNotice"
+          />
+        </div>
+      </div>
+      <q-toggle v-model="timerShowClock" :label="t('speaker-show-clock')" />
+      <div
+        v-if="!currentSettings?.timerRemoteEnable"
+        class="text-caption text-dark-grey"
+      >
+        {{ t('speaker-monitor-tablet-hint') }}
+      </div>
+    </div>
+
     <!-- Timer remote: where to open the read-only page -->
     <template v-if="currentSettings?.timerRemoteEnable">
       <q-separator class="bg-accent-200 q-my-sm" />
@@ -395,23 +444,25 @@
               : t('timer-remote-no-network')
           }}
         </div>
-        <div
-          v-for="url in timerRemoteUrls"
-          :key="url"
-          class="row items-center no-wrap q-gutter-x-sm"
-        >
-          <code class="col ellipsis timer-remote__url">{{ url }}</code>
-          <q-btn
-            :aria-label="t('timer-remote-copy')"
-            dense
-            flat
-            icon="mmm-link"
-            round
-            size="sm"
-            @click="copyRemoteUrl(url)"
+        <div v-if="timerRemoteUrls.length" class="timer-remote__list">
+          <div
+            v-for="url in timerRemoteUrls"
+            :key="url"
+            class="row items-center no-wrap q-gutter-x-sm"
           >
-            <q-tooltip :delay="500">{{ t('timer-remote-copy') }}</q-tooltip>
-          </q-btn>
+            <code class="col ellipsis timer-remote__url">{{ url }}</code>
+            <q-btn
+              :aria-label="t('timer-remote-copy')"
+              dense
+              flat
+              icon="mmm-link"
+              round
+              size="sm"
+              @click="copyRemoteUrl(url)"
+            >
+              <q-tooltip :delay="500">{{ t('timer-remote-copy') }}</q-tooltip>
+            </q-btn>
+          </div>
         </div>
       </div>
     </template>
@@ -496,6 +547,7 @@ const {
   currentCongregation,
   currentSettings,
   selectedDateObject,
+  speakerNotice,
   timerRemoteUrls,
   timerWindowVisible,
 } = storeToRefs(currentState);
@@ -552,6 +604,26 @@ const {
 } = useTimer();
 
 const aheadBehindText = useTimerAheadBehindText();
+
+const speakerNoticeDraft = ref('');
+
+const timerShowClock = computed({
+  get: () => currentSettings.value?.timerShowClock ?? true,
+  set: (value: boolean) => {
+    if (currentSettings.value) currentSettings.value.timerShowClock = value;
+  },
+});
+
+const applySpeakerNotice = () => {
+  currentState.setSpeakerNotice(speakerNoticeDraft.value.trim());
+  updateTimerWindow();
+};
+
+const clearSpeakerNotice = () => {
+  speakerNoticeDraft.value = '';
+  currentState.setSpeakerNotice('');
+  updateTimerWindow();
+};
 
 const resetAllConfirmOpen = ref(false);
 
@@ -634,11 +706,22 @@ const showWindowTypeControls = computed(
   () => (screenList.value?.length ?? 0) > 2,
 );
 const showFullscreenScreenPicker = computed(
-  () => (screenList.value?.length ?? 0) > 3,
+  () => (screenList.value?.length ?? 0) >= 3,
 );
 
 const getPreferredFullscreenTimerScreen = () => {
   const screens = screenList.value ?? [];
+  const configured = timerPreferences.value.preferredScreenNumber;
+  const configuredScreen =
+    configured === undefined ? undefined : screens[configured];
+  if (
+    configured !== undefined &&
+    configuredScreen &&
+    !configuredScreen.mainWindow
+  ) {
+    return configured;
+  }
+
   const preferredNonMainNonMedia = screens.findIndex(
     (screen) => !screen.mainWindow && !screen.mediaWindow,
   );
@@ -695,6 +778,7 @@ const isTimerScreenSelected = (index: number, screen: Display) => {
 whenever(
   () => open.value,
   () => {
+    speakerNoticeDraft.value = speakerNotice.value;
     void fetchScreens();
   },
 );
@@ -727,6 +811,7 @@ watchImmediate(
     currentSettings.value?.timerOvertimeShowAmountOnly,
     currentSettings.value?.timerOvertimeBackgroundColor,
     currentSettings.value?.timerOvertimeTextColor,
+    currentSettings.value?.timerShowClock,
     currentSettings.value?.mwDay,
     currentSettings.value?.weDay,
     currentSettings.value?.mwStartTime,
@@ -759,8 +844,23 @@ watch(timerWindowVisible, (visible) => {
   border-style: dashed;
 }
 
+.timer-remote__list {
+  background: rgba(12, 52, 60, 0.04);
+  border: 1px solid rgba(12, 52, 60, 0.09);
+  border-radius: 10px;
+  max-height: 132px;
+  overflow-y: auto;
+  padding: 4px 8px;
+}
+
 .timer-remote__url {
   font-size: 0.85em;
   min-width: 0;
+  padding: 4px 0;
+}
+
+body.body--dark .timer-remote__list {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 </style>

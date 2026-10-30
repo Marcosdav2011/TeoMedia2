@@ -29,6 +29,7 @@ import {
   systemPreferences,
 } from 'electron';
 import { PLATFORM } from 'src-electron/constants';
+import { getCaptureSources } from 'src-electron/main/capture';
 import { updateDevMenuState } from 'src-electron/main/dev-menu';
 import {
   getLowDiskSpaceStatus,
@@ -523,6 +524,13 @@ handleIpcInvoke('getScreenAccessStatus', (): MediaAccessStatus =>
 );
 
 handleIpcInvoke('getAllScreens', () => getAllScreens());
+
+// Sources offered by the window/screen capture panel. Only the source id
+// crosses the bridge: the stream itself is opened inside the media window
+// with the legacy chromeMediaSource constraints, since a second
+// setDisplayMediaRequestHandler registration would replace the website
+// mirror handler (see the media-preview note below).
+handleIpcInvoke('getCaptureSources', (e) => getCaptureSources(e.sender));
 
 // Media-preview capture mode: lets MediaPreview.vue mirror the media
 // window's actual composited pixels via getUserMedia({chromeMediaSource})

@@ -1,7 +1,7 @@
 {
   "name": "meeting-media-manager-electron",
   "version": "1.0.0",
-  "description": "Meeting Media Manager Electron main/preload folder",
+  "description": "TM2 Electron main/preload folder",
   "private": true,
   "type": "module",
   "resolutions": {

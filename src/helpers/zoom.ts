@@ -18,6 +18,8 @@ import { MEETING_SCHEDULED_DURATION_MINUTES } from 'src/helpers/meeting-parts';
 import { log } from 'src/shared/vanilla';
 import { areZoomButtonsLearned } from 'src/utils/zoom';
 import { useCurrentStateStore } from 'stores/current-state';
+import { useTeoCameraStore } from 'stores/teo-camera';
+import { useTeoCaptureStore } from 'stores/teo-capture';
 import { useZoomStateStore } from 'stores/zoom-state';
 
 import { errorCatcher } from './error-catcher';
@@ -1066,6 +1068,27 @@ export const automateZoomMediaSharing = async (start: boolean) => {
   }
 };
 
+/**
+ * Shares the output window in Zoom while the output shows media, a camera or
+ * a window capture, and stops the share TM2 started once it shows none. All of
+ * them use the same output window, so one share covers everything and Zoom
+ * never sees it drop when switching between them.
+ */
+export const syncZoomOutputSharing = async () => {
+  const settings = getSettings();
+  if (
+    !settings?.zoomMeetingManagerEnable ||
+    !settings.zoomMeetingManagerAutomateMediaSharing
+  ) {
+    return;
+  }
+  const outputShowsContent =
+    useCurrentStateStore().mediaIsPlaying ||
+    !!useTeoCameraStore().activeCameraId ||
+    !!useTeoCaptureStore().activeSourceId;
+  return automateZoomMediaSharing(outputShowsContent);
+};
+
 // --- Window layout ---------------------------------------------------------
 
 /**
@@ -1289,7 +1312,8 @@ export const getZoomShareEntries = async (): Promise<{
  * Stops Zoom screen sharing after media, whichever Zoom integration is in
  * use: the Zoom Meeting Manager's own sharing, or else the keyboard shortcut
  * of the older integration. Called both when the user stops media and when
- * a video ends on its own.
+ * a video ends on its own. When a camera or a capture is assigned, the output
+ * keeps showing it, so the same meeting-manager share is kept.
  */
 export const stopZoomSharingAfterMedia = () => {
   const settings = getSettings();
@@ -1297,6 +1321,8 @@ export const stopZoomSharingAfterMedia = () => {
     settings?.zoomMeetingManagerEnable &&
     settings.zoomMeetingManagerAutomateMediaSharing
   ) {
+    if (useTeoCameraStore().activeCameraId) return;
+    if (useTeoCaptureStore().activeSourceId) return;
     void automateZoomMediaSharing(false);
   } else {
     triggerZoomScreenShare(false);

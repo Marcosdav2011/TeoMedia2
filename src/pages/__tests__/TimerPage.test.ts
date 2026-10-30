@@ -140,3 +140,33 @@ describe('TimerPage - hand alert', () => {
     expect(alert.find('.hand-alert__names').text()).toBe('Ann · Bob');
   });
 });
+
+describe('TimerPage - timer remote address', () => {
+  it('shows where to open the display on a tablet while idle', async () => {
+    const { default: TimerPage } = await import('../TimerPage.vue');
+    wrapper = mount(TimerPage);
+    timerData.value = runningPart({
+      running: false,
+      time: '',
+      timerRemoteUrls: ['http://192.168.1.50:8787/'],
+    });
+    await nextTick();
+    await nextTick();
+
+    const address = wrapper.find('.timer-remote-address');
+    expect(address.exists()).toBe(true);
+    expect(address.text()).toContain('http://192.168.1.50:8787/');
+  });
+
+  it('hides it while a part is being timed', async () => {
+    const { default: TimerPage } = await import('../TimerPage.vue');
+    wrapper = mount(TimerPage);
+    timerData.value = runningPart({
+      timerRemoteUrls: ['http://192.168.1.50:8787/'],
+    });
+    await nextTick();
+    await nextTick();
+
+    expect(wrapper.find('.timer-remote-address').exists()).toBe(false);
+  });
+});

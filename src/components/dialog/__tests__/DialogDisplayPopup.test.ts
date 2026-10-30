@@ -6,7 +6,9 @@ import { installPinia } from 'app/test/vitest/mocks/pinia';
 import BaseDialog from 'components/dialog/BaseDialog.vue';
 import { errorCatcher } from 'src/helpers/error-catcher';
 import { toggleMediaWindowVisibility } from 'src/helpers/mediaPlayback';
+import { useAppSettingsStore } from 'stores/app-settings';
 import { useCurrentStateStore } from 'stores/current-state';
+import { useTeoCameraStore } from 'stores/teo-camera';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 
@@ -17,14 +19,16 @@ vi.mock('src/helpers/mediaPlayback', () => ({
 }));
 
 installQuasarPlugin();
-installPinia();
+installPinia({ stubActions: false });
 
 const getAllScreensMock = vi.fn<() => Promise<Display[]>>();
+const moveMediaWindowMock = vi.fn();
 
 // The component destructures `getAllScreens` from `globalThis.electronApi`
 // during setup, so it must be replaced before `mount` runs.
 const installElectronApiMocks = () => {
   globalThis.electronApi.getAllScreens = getAllScreensMock;
+  globalThis.electronApi.moveMediaWindow = moveMediaWindowMock;
 };
 
 let wrapper: ReturnType<typeof mount<typeof DialogDisplayPopup>> | undefined;
@@ -63,6 +67,7 @@ const triggerScreenUpdate = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   getAllScreensMock.mockReset();
+  moveMediaWindowMock.mockReset();
   installElectronApiMocks();
 });
 
@@ -160,6 +165,64 @@ describe('DialogDisplayPopup - custom background picker', () => {
     expect(picker?.props('modelValue')).toBe(false);
     expect(state.jwpubImportFilePath).toBe('');
     expect(state.jwpubImages).toEqual([]);
+  });
+});
+
+describe('DialogDisplayPopup - fixed screen assignments', () => {
+  const externalScreen = (id: number, displayNumber: number): Display =>
+    ({
+      bounds: { height: 1080, width: 1920, x: id * 1920, y: 0 },
+      displayNumber,
+      id,
+      mainWindow: false,
+      mediaWindow: false,
+      mediaWindowVisible: false,
+    }) as Display;
+
+  it('assigns multimedia and camera to different screens and keeps them fixed', async () => {
+    getAllScreensMock.mockResolvedValue([
+      externalScreen(2, 2),
+      { ...externalScreen(1, 1), mainWindow: true },
+      externalScreen(3, 3),
+    ]);
+    await openPopup();
+    await flushPromises();
+
+    const state = wrapper?.vm as unknown as {
+      cameraScreenModel: null | number;
+      mediaScreenModel: null | number;
+      screenRoleOptions: { label: string; value: number }[];
+    };
+
+    expect(state.screenRoleOptions.map(({ value }) => value)).toEqual([0, 2]);
+
+    state.mediaScreenModel = 2;
+    await nextTick();
+
+    const appSettings = useAppSettingsStore();
+    const teoCamera = useTeoCameraStore();
+    expect(appSettings.screenPreferences.preferredScreenNumber).toBe(2);
+    expect(teoCamera.preferredOutputScreen).toBe(2);
+    expect(moveMediaWindowMock).toHaveBeenCalledWith(2, true);
+
+    state.cameraScreenModel = 0;
+    await nextTick();
+    expect(teoCamera.preferredCameraScreen).toBe(0);
+
+    // A projecting camera follows its own screen, so changing the multimedia
+    // assignment must not pull the output window away from it.
+    teoCamera.activeCameraId = 'camera-1';
+    vi.clearAllMocks();
+    state.cameraScreenModel = 2;
+    await nextTick();
+    expect(teoCamera.activeScreenIndex).toBe(2);
+    expect(moveMediaWindowMock).toHaveBeenCalledWith(2, true);
+
+    vi.clearAllMocks();
+    state.mediaScreenModel = 0;
+    await nextTick();
+    expect(teoCamera.preferredOutputScreen).toBe(0);
+    expect(moveMediaWindowMock).not.toHaveBeenCalled();
   });
 });
 

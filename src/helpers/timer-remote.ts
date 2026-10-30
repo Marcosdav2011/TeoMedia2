@@ -55,6 +55,8 @@ const applySettings = async () => {
       globalThis.electronApi.stopTimerRemote();
       runningPort = null;
       currentState.setTimerRemoteUrls([]);
+      // Clears the address from the timer display.
+      useTimer().updateTimerWindow();
       log('Timer remote stopped', 'timer', 'info');
     }
     return;

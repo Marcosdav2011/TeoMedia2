@@ -1,5 +1,5 @@
 <template>
-  <q-header class="teo-header">
+  <q-header ref="headerRef" class="teo-header">
     <DialogAbout
       v-model="aboutModal"
       :dialog-id="dialogId"
@@ -111,14 +111,20 @@
         />
       </div>
     </div>
+
+    <div v-if="showActionIsland" class="teo-header__island">
+      <ActionIsland />
+    </div>
   </q-header>
 </template>
 
 <script setup lang="ts">
-import { useIntervalFn } from '@vueuse/core';
+import { useElementSize, useIntervalFn } from '@vueuse/core';
 import DialogAbout from 'components/dialog/DialogAbout.vue';
 import TeoBrand from 'components/teo/TeoBrand.vue';
+import ActionIsland from 'components/ui/ActionIsland.vue';
 import { storeToRefs } from 'pinia';
+import { QHeader } from 'quasar';
 import { createTemporaryNotification } from 'src/helpers/notifications';
 import { updatesDisabled } from 'src/utils/fs';
 import { useCongregationSettingsStore } from 'stores/congregation-settings';
@@ -179,6 +185,16 @@ const { pause, resume } = useIntervalFn(updateVirtualClock, 1000, {
 
 const updatesAreDisabled = ref(false);
 
+// The page area is offset by the header's real height, and the action bar
+// makes it taller than the base two rows, so keep the CSS variable in sync as
+// rows appear, disappear or the window is resized.
+const headerRef = ref<QHeader>();
+const { height: headerHeight } = useElementSize(
+  headerRef,
+  { height: 0, width: 0 },
+  { box: 'border-box' },
+);
+
 const congregationSettings = useCongregationSettingsStore();
 
 const currentState = useCurrentStateStore();
@@ -199,6 +215,15 @@ const requiresCongregation = computed(
 // Camera-only profiles deliberately hide the meeting media and website sides;
 // only the live studio and settings stay reachable.
 const cameraOnlyMode = computed(() => !!currentSettings.value?.cameraOnlyMode);
+
+const showActionIsland = computed(
+  () =>
+    !cameraOnlyMode.value &&
+    !!(
+      currentSettings.value?.enableMediaDisplayButton ||
+      currentSettings.value?.enableMusicButton
+    ),
+);
 
 const tabs = computed<TeoTab[]>(() => {
   const allTabs: TeoTab[] = [
@@ -278,6 +303,16 @@ const openUpdateSettings = () => {
 const handleAutoUpdatesToggled = (event: Event) => {
   updatesAreDisabled.value = !(event as CustomEvent<boolean>).detail;
 };
+
+// Keep the page offset in step with the header's measured height.
+watch(headerHeight, (height) => {
+  if (height > 0) {
+    document.documentElement.style.setProperty(
+      '--teo-header-height',
+      `${Math.ceil(height)}px`,
+    );
+  }
+});
 
 // Only tick the clock while demo mode is on (nothing to show otherwise).
 watch(
@@ -465,6 +500,35 @@ onBeforeUnmount(() => {
 
 .teo-header__actions::-webkit-scrollbar {
   display: none;
+}
+
+// Action buttons live in the header instead of floating over the page, so they
+// need a compact footprint and must scroll sideways on narrow windows.
+.teo-header__island {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  justify-content: flex-start;
+  overflow-x: auto;
+  padding: 6px 14px 8px;
+  scrollbar-width: none;
+}
+
+.teo-header__island::-webkit-scrollbar {
+  display: none;
+}
+
+.teo-header__island :deep(#actionIsland) {
+  flex: 0 0 auto;
+  // Centers the bar when it fits, and collapses to 0 so the left edge stays
+  // scrollable when the buttons are wider than the window.
+  margin-inline: auto;
+}
+
+.teo-header__island :deep(.action-island) {
+  box-shadow: 0 10px 24px -16px rgba(13, 128, 120, 0.8);
+  padding: 4px 12px;
 }
 
 @media (max-width: 720px) {

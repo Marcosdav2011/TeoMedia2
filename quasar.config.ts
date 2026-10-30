@@ -18,9 +18,9 @@ const IS_BETA = version.includes('beta');
 const IS_TEST = process.env.TEST_VERSION === 'true';
 
 // App
-const APP_NAME = `${name}${IS_TEST ? '-test' : ''}`;
+const APP_NAME = `TM2${IS_TEST ? '-test' : ''}`;
 const PRODUCT_NAME = `${productName}${IS_TEST ? ' - Test' : ''}`;
-const APP_ID = `sircharlo.${APP_NAME}`;
+const APP_ID = `com.tm2${IS_TEST ? '.test' : ''}.desktop`;
 
 // Sentry
 const SENTRY_ORG = 'jw-projects';
@@ -158,6 +158,7 @@ export default defineConfig((ctx) => {
         appId: APP_ID,
         // eslint-disable-next-line no-template-curly-in-string
         artifactName: APP_NAME + '-${version}-${arch}.${ext}',
+        executableName: APP_NAME,
         generateUpdatesFilesForAllChannels: true,
         linux: {
           category: 'Utility',

@@ -323,21 +323,21 @@ describe('DialogZoomSetupAssistant', () => {
     await click("Yes, it's on"); // camera
     await click('Continue');
 
-    expect(text()).toContain("M³ couldn't join computer audio");
+    expect(text()).toContain("TM2 couldn't join computer audio");
     expect(text()).not.toContain('Is your microphone on');
 
     await click('Try again');
     expect(text()).toContain('Is your microphone on');
   });
 
-  it("asks whether computer audio is joined when M³ can't tell, and learns the microphone on that word", async () => {
+  it("asks whether computer audio is joined when TM2 can't tell, and learns the microphone on that word", async () => {
     zoom.joinZoomAudioForSetup.mockResolvedValueOnce('unknown');
     await mountAssistant();
     await reachVideoStep();
     await click("Yes, it's on"); // camera
     await click('Continue');
 
-    expect(text()).toContain("M³ can't tell whether computer audio is joined");
+    expect(text()).toContain("TM2 can't tell whether computer audio is joined");
     expect(text()).not.toContain('Is your microphone on');
 
     await click('Computer audio is joined');
@@ -365,7 +365,7 @@ describe('DialogZoomSetupAssistant', () => {
     expect(isDisabled(button('Continue'))).toBe(false);
   });
 
-  it("lets the user pick the Participants entry when M³ can't find Zoom's Participants button", async () => {
+  it("lets the user pick the Participants entry when TM2 can't find Zoom's Participants button", async () => {
     zoom.diagnoseZoom.mockResolvedValue({
       ...ALL_GOOD,
       hostControls: false,
@@ -418,7 +418,7 @@ describe('DialogZoomSetupAssistant', () => {
     expect(text()).not.toContain('Which of these opens the participants list');
   });
 
-  it('lets the host point out the "Mute all" button when M³ doesn\'t recognize it', async () => {
+  it('lets the host point out the "Mute all" button when TM2 doesn\'t recognize it', async () => {
     zoom.diagnoseZoom.mockResolvedValue({
       ...ALL_GOOD,
       hostControls: false,
@@ -526,7 +526,7 @@ describe('DialogZoomSetupAssistant', () => {
     );
   });
 
-  it("lets the user pick the React entry when M³ can't find Zoom's React button", async () => {
+  it("lets the user pick the React entry when TM2 can't find Zoom's React button", async () => {
     zoom.learnZoomHandRaisedPhrase
       .mockResolvedValueOnce({ error: 'react-button-not-found', ok: false })
       .mockResolvedValueOnce({ error: 'react-button-not-found', ok: false })
@@ -548,7 +548,7 @@ describe('DialogZoomSetupAssistant', () => {
     await click('Raise and lower my hand');
     expect(zoom.learnZoomHandRaisedPhrase).toHaveBeenLastCalledWith(undefined);
     // Asking is expected, not reported as an error.
-    expect(text()).toContain('M³ needs your help to find its React button');
+    expect(text()).toContain('TM2 needs your help to find its React button');
     expect(text()).not.toContain("That didn't open Zoom's reactions");
     expect(text()).toContain("Which of these opens Zoom's reactions?");
     // React is asked for once Zoom has moved it into "More": listed first.
@@ -604,8 +604,8 @@ describe('DialogZoomSetupAssistant', () => {
 
     await click('Check sharing');
     expect(zoom.testZoomShareEntry).toHaveBeenCalledWith(null);
-    // M³'s own guess failing is expected, not reported as an error.
-    expect(text()).toContain('M³ needs your help to find the one');
+    // TM2's own guess failing is expected, not reported as an error.
+    expect(text()).toContain('TM2 needs your help to find the one');
     expect(text()).not.toContain("That didn't open Zoom's share window");
     expect(text()).toContain('Which of these starts screen sharing');
     expect(text()).toContain("In Zoom's toolbar");
@@ -628,7 +628,7 @@ describe('DialogZoomSetupAssistant', () => {
     await pick('Partager');
     expect(zoom.testZoomShareEntry).toHaveBeenLastCalledWith('Partager');
     expect(settings().zoomShareButtonTitle).toBe('Partager');
-    expect(text()).toContain('offers the media window');
+    expect(text()).toContain('offers the output window');
   });
 
   it("doesn't ask for the Share button when Zoom's share window opens without the media window", async () => {
@@ -653,17 +653,17 @@ describe('DialogZoomSetupAssistant', () => {
     await learnButtons();
 
     await click('Check sharing');
-    expect(text()).toContain("the media window wasn't in it");
+    expect(text()).toContain("the output window wasn't in it");
     expect(zoom.getZoomShareEntries).not.toHaveBeenCalled();
     expect(text()).not.toContain('Which of these starts screen sharing');
 
-    // Listed, but something in front of Zoom's share window kept M³ from
+    // Listed, but something in front of Zoom's share window kept TM2 from
     // selecting it: sharing would not pick it either.
     await click('Check sharing');
-    expect(text()).toContain("M³ couldn't select it");
+    expect(text()).toContain("TM2 couldn't select it");
 
     await click('Check sharing');
-    expect(text()).toContain('offers the media window');
+    expect(text()).toContain('offers the output window');
   });
 
   it('asks to check the meeting when there is nothing to pick the Share button from', async () => {
@@ -815,8 +815,8 @@ describe('DialogZoomSetupAssistant', () => {
     await click('Skip'); // microphone
     expect(text()).toContain('Raised hands');
     await click('Skip'); // raised hands
-    expect(text()).toContain('Sharing the media window');
+    expect(text()).toContain('Sharing the output window');
     await click('Skip'); // sharing
-    expect(text()).toContain('What should M³ do?');
+    expect(text()).toContain('What should TM2 do?');
   });
 });

@@ -1,3 +1,5 @@
+import type { TeoCameraLayout, TeoCameraView } from 'src/types';
+
 import { errorCatcher } from 'src/helpers/error-catcher';
 
 /**
@@ -10,7 +12,39 @@ import { errorCatcher } from 'src/helpers/error-catcher';
  * temporary screen number on the output window.
  */
 export const TEO_CAMERA_CHANNEL = 'teo-camera-stream';
+export const TEO_CAMERA_LAYOUT_CHANNEL = 'teo-camera-layout';
+export const TEO_CAMERA_VIEW_CHANNEL = 'teo-camera-view';
+export const TEO_CAPTURE_CHANNEL = 'teo-capture-source';
+export const TEO_CAPTURE_STATUS_CHANNEL = 'teo-capture-status';
 export const TEO_SCREEN_IDENTIFY_CHANNEL = 'teo-screen-identify';
+
+/**
+ * The yeartext is also mirrored into shared localStorage. BroadcastChannel
+ * only reaches windows that are already listening, so an output window
+ * created late (or one that missed its startup request) could otherwise stay
+ * black until the yeartext happened to change again.
+ */
+export const TEO_YEARTEXT_CACHE_KEY = 'teo-yeartext';
+
+export const cacheYeartext = (yeartext: null | string | undefined) => {
+  try {
+    localStorage.setItem(TEO_YEARTEXT_CACHE_KEY, yeartext ?? '');
+  } catch {
+    // Storage can be unavailable in restricted windows; the broadcast below
+    // still carries the value to every listening output.
+  }
+};
+
+/**
+ * The media window reports back when it could not open a captured source, or
+ * when the source goes away (its window closed, the screen was unplugged).
+ * Without it the main window would keep claiming the capture is running while
+ * the output stays black or frozen.
+ */
+export interface TeoCaptureStatusMessage {
+  ok: boolean;
+  sourceId: string;
+}
 
 export interface TeoScreenIdentifyMessage {
   label: string;
@@ -23,6 +57,10 @@ export interface TeoScreenIdentifyMessage {
 }
 
 let cameraChannel: BroadcastChannel | null = null;
+let cameraLayoutChannel: BroadcastChannel | null = null;
+let cameraViewChannel: BroadcastChannel | null = null;
+let captureChannel: BroadcastChannel | null = null;
+let captureStatusChannel: BroadcastChannel | null = null;
 let identifyChannel: BroadcastChannel | null = null;
 
 const getChannel = (
@@ -49,6 +87,56 @@ export const postTeoCamera = (deviceId: string) => {
   } catch (error) {
     errorCatcher(error, {
       contexts: { fn: { name: 'postTeoCamera' } },
+    });
+  }
+};
+
+export const postTeoCameraLayout = (layout: '' | TeoCameraLayout) => {
+  try {
+    cameraLayoutChannel = getChannel(
+      TEO_CAMERA_LAYOUT_CHANNEL,
+      cameraLayoutChannel,
+    );
+    cameraLayoutChannel?.postMessage(layout);
+  } catch (error) {
+    errorCatcher(error, {
+      contexts: { fn: { name: 'postTeoCameraLayout' } },
+    });
+  }
+};
+
+export const postTeoCameraView = (view: TeoCameraView) => {
+  try {
+    cameraViewChannel = getChannel(TEO_CAMERA_VIEW_CHANNEL, cameraViewChannel);
+    cameraViewChannel?.postMessage(view);
+  } catch (error) {
+    errorCatcher(error, {
+      contexts: { fn: { name: 'postTeoCameraView' } },
+    });
+  }
+};
+
+export const postTeoCapture = (sourceId: string) => {
+  try {
+    captureChannel = getChannel(TEO_CAPTURE_CHANNEL, captureChannel);
+    captureChannel?.postMessage(sourceId);
+  } catch (error) {
+    errorCatcher(error, {
+      contexts: { fn: { name: 'postTeoCapture' } },
+    });
+  }
+};
+
+export const postTeoCaptureStatus = (message: TeoCaptureStatusMessage) => {
+  try {
+    captureStatusChannel = getChannel(
+      TEO_CAPTURE_STATUS_CHANNEL,
+      captureStatusChannel,
+    );
+    captureStatusChannel?.postMessage(message);
+  } catch (error) {
+    errorCatcher(error, {
+      contexts: { fn: { name: 'postTeoCaptureStatus' } },
     });
   }
 };

@@ -122,19 +122,14 @@ export async function getSharedDataPath(): Promise<null | string> {
   if (PLATFORM === 'win32') {
     sharedPath = join(
       process.env.ProgramData || String.raw`C:\ProgramData`, // NOSONAR: '' means not set
-      PRODUCT_NAME || 'Meeting Media Manager',
+      PRODUCT_NAME || 'TM2',
     );
   } else if (PLATFORM === 'darwin') {
-    sharedPath = join(
-      '/Library/Application Support',
-      PRODUCT_NAME || 'Meeting Media Manager',
-    );
+    sharedPath = join('/Library/Application Support', PRODUCT_NAME || 'TM2');
   } else {
     sharedPath = join(
       '/var/cache',
-      (PRODUCT_NAME || 'meeting-media-manager')
-        .toLowerCase()
-        .replaceAll(' ', '-'),
+      (PRODUCT_NAME || 'tm2').toLowerCase().replaceAll(' ', '-'),
     );
   }
 

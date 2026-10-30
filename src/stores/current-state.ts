@@ -132,6 +132,11 @@ interface Store {
   pendingSectionImports: MediaSectionIdentifier[];
   pinyinActive: boolean;
   selectedDate: string;
+  /**
+   * On-screen message shown to whoever watches the timer/speaker display.
+   * Session-only: it's an ad-hoc announcement, not a saved setting.
+   */
+  speakerNotice: string;
   /** Where the timer remote page can be opened, while it's served. */
   timerRemoteUrls: string[];
   timerWindowVisible: boolean;
@@ -377,6 +382,9 @@ export const useCurrentStateStore = defineStore('current-state', {
       await this.syncZoomHelper();
 
       return this.getInvalidSettings(newCongregation).length > 0;
+    },
+    setSpeakerNotice(notice: string) {
+      this.speakerNotice = notice;
     },
     setTimerRemoteUrls(urls: string[]) {
       this.timerRemoteUrls = urls;
@@ -708,6 +716,7 @@ export const useCurrentStateStore = defineStore('current-state', {
       pendingSectionImports: [],
       pinyinActive: false,
       selectedDate: formatDate(new Date(), 'YYYY/MM/DD'),
+      speakerNotice: '',
       timerRemoteUrls: [],
       timerWindowVisible: false,
       websiteSelection: undefined,

@@ -203,7 +203,7 @@ describe('DialogZoomMeetingManagerPopup', () => {
       meeting: { dialogs: ['InviteToJoinWndCls'], found: true, sharing: false },
     });
 
-    expect(document.body.textContent).toContain("may be in M³'s way");
+    expect(document.body.textContent).toContain("may be in TM2's way");
   });
 
   it('launches the configured meeting, and only when an ID is set', async () => {

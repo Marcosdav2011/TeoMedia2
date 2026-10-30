@@ -11,16 +11,16 @@
   >
     <!-- Base yeartext layer - always visible with black background -->
     <div
-      v-if="fontsSet && !mediaPlayerCustomBackground && !activeCameraStreamId"
+      v-if="!mediaPlayerCustomBackground && !cameraIsFullScreen"
       class="base-layer"
-      :class="{ 'blank-screen': isTransitioning }"
+      :class="baseLayerClasses"
     >
       <!-- eslint-disable next-line vue/no-v-html -->
       <div
         id="yeartext"
         class="center"
         :style="yeartextFontStyle"
-        v-html="sanitize(yeartext || '')"
+        v-html="sanitize(displayedYeartext || '')"
       />
       <div
         v-if="!hideMediaLogo && jwIconsFontLoaded"
@@ -35,9 +35,9 @@
 
     <!-- Custom background layer - always visible when set -->
     <div
-      v-if="mediaPlayerCustomBackground && !activeCameraStreamId"
+      v-if="mediaPlayerCustomBackground && !cameraIsFullScreen"
       class="base-layer"
-      :class="{ 'blank-screen': isTransitioning }"
+      :class="baseLayerClasses"
     >
       <q-img
         class="fit-snugly"
@@ -48,11 +48,29 @@
     </div>
 
     <!-- Camera background layer -->
-    <div v-if="activeCameraStreamId" class="camera-layer">
+    <div
+      v-if="activeCameraStreamId"
+      class="camera-layer"
+      :class="`camera-layer--${activeCameraLayout}`"
+    >
+      <div class="camera-frame">
+        <video
+          ref="cameraElement"
+          autoplay
+          class="camera-video"
+          muted
+          playsinline
+          :style="cameraViewStyle"
+        />
+      </div>
+    </div>
+
+    <!-- Window/screen capture layer, below live media -->
+    <div v-if="activeCaptureSourceId" class="capture-layer">
       <video
-        ref="cameraElement"
+        ref="captureElement"
         autoplay
-        class="fit-snugly"
+        class="capture-video"
         muted
         playsinline
       />
@@ -179,6 +197,8 @@
 </template>
 
 <script setup lang="ts">
+import type { TeoCameraLayout, TeoCameraView } from 'src/types';
+
 import {
   useBroadcastChannel,
   watchDeep,
@@ -206,8 +226,17 @@ import {
 } from 'src/helpers/media-window-zoom-pan';
 import { createTemporaryNotification } from 'src/helpers/notifications';
 import {
+  normalizeTeoCameraView,
+  teoCameraViewTransform,
+} from 'src/helpers/teo-camera-view';
+import {
+  postTeoCaptureStatus,
   TEO_CAMERA_CHANNEL,
+  TEO_CAMERA_LAYOUT_CHANNEL,
+  TEO_CAMERA_VIEW_CHANNEL,
+  TEO_CAPTURE_CHANNEL,
   TEO_SCREEN_IDENTIFY_CHANNEL,
+  TEO_YEARTEXT_CACHE_KEY,
   type TeoScreenIdentifyMessage,
 } from 'src/helpers/teo-outputs';
 import { log } from 'src/shared/vanilla';
@@ -350,6 +379,7 @@ const mediaElement2 = useTemplateRef<HTMLAudioElement | HTMLVideoElement>(
   'mediaElement2',
 );
 const cameraElement = useTemplateRef<HTMLVideoElement>('cameraElement');
+const captureElement = useTemplateRef<HTMLVideoElement>('captureElement');
 const slideshowAudioElement = useTemplateRef<HTMLAudioElement>(
   'slideshowAudioElement',
 );
@@ -560,6 +590,53 @@ const { data: cameraStreamId } = useBroadcastChannel<string, string>({
 const activeCameraStreamId = computed(() =>
   isAuxiliaryOutput ? '' : cameraStreamId.value,
 );
+
+// Window/screen capture: only the source id travels over the channel; the
+// stream is opened here, inside the window that shows it.
+const { data: captureSourceId } = useBroadcastChannel<string, string>({
+  name: TEO_CAPTURE_CHANNEL,
+});
+
+const activeCaptureSourceId = computed(() =>
+  isAuxiliaryOutput ? '' : captureSourceId.value,
+);
+
+// How the camera shares the output with the yeartext, chosen in the main
+// window. The auxiliary output never shows a camera, so it stays full screen.
+const { data: cameraLayoutData } = useBroadcastChannel<
+  '' | TeoCameraLayout,
+  '' | TeoCameraLayout
+>({
+  name: TEO_CAMERA_LAYOUT_CHANNEL,
+});
+
+const cameraLayout = computed<TeoCameraLayout>(
+  () => cameraLayoutData.value || 'fullscreen',
+);
+
+const activeCameraLayout = computed<TeoCameraLayout>(() =>
+  activeCameraStreamId.value ? cameraLayout.value : 'fullscreen',
+);
+
+const cameraIsFullScreen = computed(
+  () =>
+    !!activeCameraStreamId.value && activeCameraLayout.value === 'fullscreen',
+);
+
+// Zoom and pan of the camera picture, also chosen in the main window. Scenes
+// save it with the camera and layout.
+const { data: cameraViewData } = useBroadcastChannel<
+  TeoCameraView,
+  TeoCameraView
+>({
+  name: TEO_CAMERA_VIEW_CHANNEL,
+});
+
+const cameraView = computed(() => normalizeTeoCameraView(cameraViewData.value));
+
+const cameraViewStyle = computed(() => ({
+  transform: teoCameraViewTransform(cameraView.value),
+}));
 
 const { data: teoScreenIdentify } = useBroadcastChannel<
   TeoScreenIdentifyMessage,
@@ -1034,6 +1111,14 @@ const playMedia = () => {
 
 const isTransitioning = ref(false);
 
+// The yeartext shares the frame with the camera only in the inset and split
+// layouts; in the inset one, its logo moves up out of the camera's corner.
+const baseLayerClasses = computed(() => ({
+  'base-layer--pip': activeCameraLayout.value === 'pip',
+  'base-layer--split': activeCameraLayout.value === 'split',
+  'blank-screen': isTransitioning.value,
+}));
+
 const crossfadeToNewMedia = (newUrl: string) => {
   log(
     '🎬 [crossfadeToNewMedia] Starting crossfade to:',
@@ -1209,6 +1294,22 @@ const { data: yeartext } = useBroadcastChannel<
   name: 'yeartext',
 });
 
+// The broadcast only reaches a window that is already listening. The main
+// window also caches the yeartext in shared storage, so an output created
+// later still has something to show before its first message arrives.
+const cachedYeartext = ref(
+  globalThis.localStorage?.getItem(TEO_YEARTEXT_CACHE_KEY) ?? '',
+);
+
+const displayedYeartext = computed(
+  () => yeartext.value || cachedYeartext.value,
+);
+
+const refreshCachedYeartext = () => {
+  cachedYeartext.value =
+    globalThis.localStorage?.getItem(TEO_YEARTEXT_CACHE_KEY) ?? '';
+};
+
 // Receive current writing script and language code for yeartext font selection
 const { data: currentScript } = useBroadcastChannel<string, string>({
   name: 'current-script',
@@ -1333,14 +1434,62 @@ const requestStream = async (isCamera: boolean, deviceId?: string) => {
   }
 };
 
+// Opens the window or screen picked in the main window. The source id comes
+// from the main process's desktopCapturer call, so this uses Electron's
+// legacy desktop-capture constraints instead of getDisplayMedia - the
+// session's single display-media handler already belongs to the website
+// mirror, and a second registration would replace it.
+const requestCaptureStream = async (sourceId: string) => {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        mandatory: {
+          chromeMediaSource: 'desktop',
+          chromeMediaSourceId: sourceId,
+        },
+      },
+    } as unknown as MediaStreamConstraints);
+  } catch (error) {
+    errorCatcher(error, {
+      contexts: { fn: { name: 'streamCapture' } },
+    });
+    return null;
+  }
+};
+
+/**
+ * The captured window may close or its screen may be disconnected while it is
+ * projected. The stream ends silently in that case, so tell the main window to
+ * drop the capture instead of leaving a frozen frame on the output.
+ */
+const watchCaptureEnd = (stream: MediaStream, sourceId: string) => {
+  stream.getVideoTracks().forEach((track) => {
+    track.addEventListener('ended', () => {
+      postTeoCaptureStatus({ ok: false, sourceId });
+    });
+  });
+};
+
 // Send request to main layout to get the current state, for when the media player window is first opened
 const { post: postGetCurrentState } = useBroadcastChannel<string, string>({
   name: 'get-current-media-window-variables',
 });
 
-const fontsSet = ref(false);
-const jwIconsFontLoaded = ref(false);
+const requestCurrentState = () => {
+  postGetCurrentState(Date.now().toString());
+};
 
+// A window created at startup - the second output especially - can send its
+// first request before the main window is listening. Without a retry, an
+// idle output would stay black until something played over it.
+const initialStateTimers: ReturnType<typeof setTimeout>[] = [];
+
+const requestCurrentStateAgain = () => {
+  if (document.visibilityState === 'visible') requestCurrentState();
+};
+
+const jwIconsFontLoaded = ref(false);
 const loadFonts = async () => {
   try {
     await setElementFont('Wt-ClearText-Bold');
@@ -1358,8 +1507,6 @@ const loadFonts = async () => {
     });
     jwIconsFontLoaded.value = false;
   }
-
-  fontsSet.value = true;
 };
 
 const clearWebsiteStream = () => {
@@ -1646,15 +1793,22 @@ watch(
 // Identification is a black full-screen layer; never let it cover media or a
 // camera that starts while the number is still showing.
 watch(
-  () => mediaPlayingUrl.value || activeCameraStreamId.value,
+  () =>
+    mediaPlayingUrl.value ||
+    activeCameraStreamId.value ||
+    activeCaptureSourceId.value,
   (active) => {
     if (active) clearScreenIdentify();
   },
 );
+// Switching cameras directly (by starting another scene) must cancel a
+// request still opening the previous one and release the running device.
+let cameraRequestToken = 0;
 
 watchImmediate(
   () => activeCameraStreamId.value,
   async (deviceId) => {
+    const token = ++cameraRequestToken;
     log(
       `🎬 [cameraStreamId] Watcher triggered. DeviceId: ${deviceId}`,
       'mediaPlayer',
@@ -1682,7 +1836,20 @@ watchImmediate(
       'log',
     );
 
+    // A different camera replaces this one: close the old device first so it
+    // doesn't stay busy and lit after the switch.
+    if (cameraElement.value?.srcObject) {
+      cameraElement.value.pause();
+      stopMediaStreamTracks(cameraElement.value.srcObject);
+      cameraElement.value.srcObject = null;
+    }
+
     const stream = await requestStream(true, deviceId);
+    if (token !== cameraRequestToken) {
+      // A newer camera was chosen meanwhile; this one must not take over.
+      stopMediaStreamTracks(stream);
+      return;
+    }
     const ready =
       !!stream && (await ensureElementReady(() => cameraElement.value, 40));
 
@@ -1704,6 +1871,13 @@ watchImmediate(
       return;
     }
 
+    if (token !== cameraRequestToken) {
+      // Last check before taking over the element: another camera may have
+      // been chosen while this one was starting.
+      stopMediaStreamTracks(stream);
+      return;
+    }
+
     log('🎬 [cameraStreamId] Setting stream to element', 'mediaPlayer', 'log');
     cameraElement.value.srcObject = stream;
     try {
@@ -1711,6 +1885,59 @@ watchImmediate(
       log('🎬 [cameraStreamId] Camera stream started', 'mediaPlayer', 'log');
     } catch (e) {
       errorCatcher(e);
+    }
+  },
+);
+
+// Switching capture sources or stopping must release the running stream; a
+// newer request always wins over one still opening.
+let captureRequestToken = 0;
+
+watchImmediate(
+  () => activeCaptureSourceId.value,
+  async (sourceId) => {
+    const token = ++captureRequestToken;
+
+    if (!sourceId) {
+      if (captureElement.value) {
+        captureElement.value.pause();
+        stopMediaStreamTracks(captureElement.value.srcObject);
+        captureElement.value.srcObject = null;
+      }
+      return;
+    }
+
+    let retries = 0;
+    while (!captureElement.value && retries < 60) {
+      await sleep(50); // NOSONAR: sequential - polls until ready
+      retries++;
+    }
+
+    if (captureElement.value?.srcObject) {
+      captureElement.value.pause();
+      stopMediaStreamTracks(captureElement.value.srcObject);
+      captureElement.value.srcObject = null;
+    }
+
+    const stream = await requestCaptureStream(sourceId);
+    if (token !== captureRequestToken) {
+      stopMediaStreamTracks(stream);
+      return;
+    }
+    if (!stream || !captureElement.value) {
+      stopMediaStreamTracks(stream);
+      postTeoCaptureStatus({ ok: false, sourceId });
+      return;
+    }
+
+    watchCaptureEnd(stream, sourceId);
+    captureElement.value.srcObject = stream;
+    try {
+      await captureElement.value.play();
+    } catch (error) {
+      errorCatcher(error, {
+        contexts: { fn: { name: 'playCaptureStream' } },
+      });
     }
   },
 );
@@ -1768,10 +1995,16 @@ watchImmediate(
 );
 
 onMounted(() => {
-  postGetCurrentState(Date.now().toString());
-  // The yeartext base layer is gated on fontsSet. If the main window has no
-  // changed values to report, the watcher above never runs loadFonts() and
-  // the text would stay hidden for the whole session.
+  requestCurrentState();
+  [250, 1000, 2500, 5000].forEach((delay) => {
+    initialStateTimers.push(setTimeout(requestCurrentState, delay));
+  });
+  document.addEventListener('visibilitychange', requestCurrentStateAgain);
+  // Another window may receive the yeartext cache write before this one is
+  // listening on the broadcast channel.
+  globalThis.addEventListener('storage', refreshCachedYeartext);
+  // The text itself no longer waits on this (it renders with the fallback
+  // font); loading the fonts only swaps in the proper glyphs and logo.
   void loadFonts();
 });
 
@@ -1781,9 +2014,13 @@ onBeforeUnmount(() => {
     'mediaPlayer',
     'log',
   );
+  initialStateTimers.forEach((timer) => clearTimeout(timer));
+  document.removeEventListener('visibilitychange', requestCurrentStateAgain);
+  globalThis.removeEventListener('storage', refreshCachedYeartext);
   cleanupMediaElement(mediaElement1.value);
   cleanupMediaElement(mediaElement2.value);
   cleanupMediaElement(cameraElement.value);
+  cleanupMediaElement(captureElement.value);
   stopZoomPanAnimation();
   if (screenIdentifyTimer) clearTimeout(screenIdentifyTimer);
 });
@@ -1820,6 +2057,82 @@ onBeforeUnmount(() => {
      resolves in .display-layer's favor via DOM order (it comes later in the
      template), matching the intended base < camera < display stacking. */
   z-index: 2;
+}
+
+/* Crops the zoomed or panned camera to the part the audience should see. */
+.camera-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.camera-video {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center center;
+  width: 100%;
+}
+
+/* Capture sits above the idle layers but below live media (which wins the
+   tie at z-index 3 by DOM order). */
+.capture-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: black;
+  z-index: 3;
+}
+
+.capture-video {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+/* Camera as a small inset over the yeartext. */
+.camera-layer--pip {
+  background-color: transparent;
+  pointer-events: none;
+}
+
+.camera-layer--pip .camera-frame {
+  aspect-ratio: 16 / 9;
+  border-radius: 1vw;
+  bottom: 4vh;
+  box-shadow: 0 0 2vw rgb(0 0 0 / 55%);
+  height: auto;
+  inset: auto 4vh 4vh auto;
+  width: 30vw;
+}
+
+/* Camera and yeartext side by side. */
+.camera-layer--split {
+  width: 50%;
+}
+
+.base-layer--split {
+  left: 50%;
+  width: 50%;
+}
+
+.base-layer--split .fit-snugly {
+  width: 50vw;
+}
+
+.base-layer--split :deep(#yeartext) {
+  font-size: 2.4vw;
+  line-height: 3.4vw;
+  padding: 0 2vw;
+}
+
+.base-layer--pip :deep(#yeartextLogoContainer) {
+  bottom: auto;
+  right: 6vh;
+  top: 6vh;
 }
 
 .display-layer {

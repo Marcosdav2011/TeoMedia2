@@ -121,7 +121,7 @@ describe('SetupWizard, Zoom', () => {
     await mountWizard();
     await click('Yes');
     await click('Set up later');
-    expect(text()).toContain('M³ is now ready to be used');
+    expect(text()).toContain('TM2 is now ready to be used');
     expect(settings().zoomMeetingManagerEnable).toBe(true);
 
     await goToStep(ZOOM_STEP);
@@ -157,7 +157,7 @@ describe('SetupWizard, OBS Studio', () => {
     expect(text()).toContain(
       "If you choose a media scene for OBS Studio, OBS Studio will show the media in Zoom instead, and Zoom's media sharing will be turned off.",
     );
-    await click('Yes'); // integrate M³ with it
+    await click('Yes'); // integrate TM2 with it
     expect(settings().obsEnable).toBe(true);
     // Integrating alone doesn't show media in Zoom yet
     expect(settings().zoomMeetingManagerAutomateMediaSharing).toBe(true);

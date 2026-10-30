@@ -6,7 +6,7 @@ import { cloneMeetingQuickActionSettings } from 'src/utils/clone-settings';
 const PROFILE_SETTINGS_EXPORT_VERSION = 1;
 
 interface ProfileSettingsExport {
-  app: 'Meeting Media Manager';
+  app: 'TM2';
   exportedAt: string;
   profileSettingsExportVersion: typeof PROFILE_SETTINGS_EXPORT_VERSION;
   settings: Partial<SettingsValues>;
@@ -87,7 +87,7 @@ export const exportProfileSettingsToFile = async (
   settings: SettingsValues,
 ): Promise<boolean> => {
   const exportData: ProfileSettingsExport = {
-    app: 'Meeting Media Manager',
+    app: 'TM2',
     exportedAt: new Date().toISOString(),
     profileSettingsExportVersion: PROFILE_SETTINGS_EXPORT_VERSION,
     settings: normalizeProfileSettings(settings),

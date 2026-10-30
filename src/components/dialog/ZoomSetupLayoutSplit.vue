@@ -56,7 +56,7 @@
               <ZoomLayoutWindowMock
                 :height="m3Size.height"
                 kind="m3"
-                :label="`M³ · ${percent(share)}`"
+                :label="`TM2 · ${percent(share)}`"
                 :width="m3Size.width"
               />
             </div>
@@ -84,7 +84,7 @@
               ref="dividerInput"
               :aria-label="t('zoom-setup-layout-divider')"
               :aria-orientation="range.vertical ? 'vertical' : 'horizontal'"
-              :aria-valuetext="`M³ ${percent(share)}, Zoom ${percent(1 - share)}`"
+              :aria-valuetext="`TM2 ${percent(share)}, Zoom ${percent(1 - share)}`"
               class="zoom-layout-preview__divider-input"
               :max="dividerBounds.max"
               :min="dividerBounds.min"
@@ -198,7 +198,7 @@ import { useAppSettingsStore } from 'stores/app-settings';
 import { computed, ref, useTemplateRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-// The setup assistant's second window layout step: how M³ and Zoom share
+// The setup assistant's second window layout step: how TM2 and Zoom share
 // Zoom's screen, on a drawing of that screen at its real shape, by dragging
 // the divider between them. It clicks onto the usual proportions (Alt drags
 // it freely; the arrow keys move it by 1 %), and never leaves a window
@@ -284,7 +284,7 @@ const place = (at: number, size: number) =>
 const edge = (at: number) =>
   range.value.vertical ? { top: `${at * 100}%` } : { left: `${at * 100}%` };
 
-// Where the divider can't go: too little room left for M³ on its side, or
+// Where the divider can't go: too little room left for TM2 on its side, or
 // for Zoom on the other.
 const noGoZones = computed(() => {
   const m3Zone = Math.max(0, range.value.min);

@@ -78,6 +78,7 @@ export const electronApi: ElectronApi = {
   },
   getAppDataPath: async () => fakePath('app'),
   getBetaUpdatesPath: async () => fakePath('app/beta-updates', false),
+  getCaptureSources: async () => [],
   getLocales: async () => [],
   getLocalPathFromFileObject: function (fileObject) {
     throw new Error('Function not implemented.');

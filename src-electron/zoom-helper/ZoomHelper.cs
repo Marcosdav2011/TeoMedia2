@@ -2739,11 +2739,20 @@ namespace M3.ZoomHelper
 
         static void CloseSharePicker(El picker)
         {
-            if (!CloseWithEscape(picker.Raw.CurrentNativeWindowHandle))
+            try
             {
+                if (CloseWithEscape(picker.Raw.CurrentNativeWindowHandle)) return;
                 // Its title bar's close button, as a fallback.
                 var buttons = Uia.Descendants(picker, Uia.ButtonType);
                 if (buttons.Count > 0) Press(buttons[0]);
+            }
+            catch (Exception)
+            {
+                // Zoom can leave the element stale while its window list
+                // refreshes, or refuse to report its handle, as it did with
+                // EVENT_E_ALL_SUBSCRIBERS_FAILED. Close whichever picker is
+                // open, so the reason sharing didn't start isn't lost.
+                foreach (var handle in TopWindows(SharePickerClass, true)) CloseWithEscape(handle);
             }
         }
 
@@ -2751,15 +2760,23 @@ namespace M3.ZoomHelper
         {
             if (IsSharing()) return Changed(false);
             var window = RequireMeetingWindow();
-            OpenSharePicker(window, shareTitle);
-            var picker = WaitForWindow(SharePickerClass, WaitTimeoutMs);
-            if (picker == null) throw new ZoomActionError("share-picker-not-found");
-            var problem = SelectShareWindow(picker, windowTitle);
-            if (problem != null)
+            El picker = null;
+            string problem = "share-picker-not-found";
+            for (int attempt = 0; attempt < 2; attempt++)
             {
+                if (attempt > 0) Thread.Sleep(500);
+                OpenSharePicker(window, shareTitle);
+                picker = WaitForWindow(SharePickerClass, WaitTimeoutMs);
+                if (picker == null) continue;
+                problem = SelectShareWindow(picker, windowTitle);
+                if (problem == null) break;
                 CloseSharePicker(picker);
-                throw new ZoomActionError(problem);
+                picker = null;
+                // A window list that was still refreshing is worth a second
+                // look; a selection Zoom turned down won't get better.
+                if (problem != "window-to-share-not-found") break;
             }
+            if (problem != null) throw new ZoomActionError(problem);
             // Share sound, then Optimize for video clips, in every language.
             var checkboxes = Uia.Descendants(picker, Uia.CheckBoxType);
             for (int i = 0; i < Math.Min(2, checkboxes.Count); i++) SetChecked(checkboxes[i], true);

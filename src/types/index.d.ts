@@ -14,5 +14,6 @@ export * from './meeting-quick-actions';
 export * from './obs';
 export * from './search';
 export * from './settings';
+export * from './teo-camera';
 export * from './timer';
 export * from './zoom';

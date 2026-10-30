@@ -30,19 +30,6 @@
 
     <MediaPreview v-if="!cameraOnlyMode" />
 
-    <!-- Footer -->
-    <q-footer
-      v-if="
-        !cameraOnlyMode &&
-        (currentSettings?.enableMediaDisplayButton ||
-          currentSettings?.enableMusicButton)
-      "
-      class="q-pb-sm action-island-container"
-      style="left: 50% !important"
-    >
-      <ActionIsland />
-    </q-footer>
-
     <ConfirmDialog
       v-model="macosPermissionPromptOpen"
       :confirm-label="t('choose-a-folder')"
@@ -112,7 +99,6 @@ import HeaderBase from 'components/header/HeaderBase.vue';
 import MediaPreview from 'components/media/MediaPreview.vue';
 import TimerDockPanel from 'components/media/TimerDockPanel.vue';
 import TeoOutputKeeper from 'components/teo/TeoOutputKeeper.vue';
-import ActionIsland from 'components/ui/ActionIsland.vue';
 import AnnouncementBanner from 'components/ui/AnnouncementBanner.vue';
 import { storeToRefs } from 'pinia';
 import { useMeta, useQuasar } from 'quasar';
@@ -157,6 +143,7 @@ import {
   createTemporaryNotification,
   notifyDiskFull,
 } from 'src/helpers/notifications';
+import { cacheYeartext } from 'src/helpers/teo-outputs';
 import { syncTimerRemote } from 'src/helpers/timer-remote';
 import { createWatchFolderEventQueue } from 'src/helpers/watch-folder-event-queue';
 import { cancelZoomRun, stopZoomSharingAfterMedia } from 'src/helpers/zoom';
@@ -1162,12 +1149,20 @@ const { post: postCurrentLang } = useBroadcastChannel<string, string>({
 });
 
 // Send yeartext to the media player page using useBroadcastChannel
-const { post: postYeartext } = useBroadcastChannel<
+const { post: postYeartextBroadcast } = useBroadcastChannel<
   null | string | undefined,
   null | string | undefined
 >({
   name: 'yeartext',
 });
+
+// The output windows usually get this over the broadcast, but a window that
+// starts late misses messages sent before it was listening. Caching it in
+// shared storage lets it show the current text as soon as it mounts.
+const postYeartext = (value: null | string | undefined) => {
+  cacheYeartext(value);
+  postYeartextBroadcast(value);
+};
 
 // Receive media playing action from the media player page using useBroadcastChannel
 const { data: mediaPlayingAction } = useBroadcastChannel<
@@ -1372,6 +1367,12 @@ watchImmediate(
     if (!yeartextWatcherPaused.value) {
       postYeartext(yeartext.value);
     }
+    // The script and language pick the yeartext font. A window that missed
+    // their initial broadcast would otherwise show the wrong glyphs.
+    const script = currentState.currentLangObject?.script;
+    if (script) postCurrentScript(script);
+    const lang = currentSettings.value?.lang;
+    if (lang) postCurrentLang(lang);
     postCurrentMediaUrl(mediaPlaying.value.url);
     postCurrentMediaAction(mediaPlaying.value.action);
     postCurrentSubtitlesUrl(mediaPlaying.value.subtitlesUrl);

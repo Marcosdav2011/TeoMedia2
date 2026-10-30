@@ -33,6 +33,7 @@ import {
   MAX_AYFM_PARTS,
   MAX_LAC_PARTS,
 } from 'src/helpers/meeting-parts';
+import { useAppSettingsStore } from 'stores/app-settings';
 import { useCurrentStateStore } from 'stores/current-state';
 import { useHandAlertStore } from 'stores/hand-alert';
 import { computed, effectScope, ref, watch } from 'vue';
@@ -167,6 +168,8 @@ const toHoursMinutes = (timestamp: number) => {
 const createTimer = () => {
   const currentState = useCurrentStateStore();
   const { currentSettings, selectedDateObject } = storeToRefs(currentState);
+  const appSettingsStore = useAppSettingsStore();
+  const { timerPreferences } = storeToRefs(appSettingsStore);
 
   // Only used while no day is selected (which the calendar page never
   // allows for long): the timer still works, it just doesn't persist.
@@ -815,6 +818,7 @@ const createTimer = () => {
       mwStartTime: currentSettings.value?.mwStartTime,
       paused: timerPaused.value,
       running: timerRunning.value,
+      speakerNotice: currentState.speakerNotice,
       time: timerRunning.value ? formattedTime.value : '',
       timerBackgroundColor: currentSettings.value?.timerBackgroundColor,
       timerCountdownDisplay: currentSettings.value?.timerCountdownDisplay,
@@ -836,6 +840,8 @@ const createTimer = () => {
         currentSettings.value?.timerOvertimeShowAmountOnly,
       timerOvertimeTextColor: currentSettings.value?.timerOvertimeTextColor,
       timerPartTargetSeconds: getPartDurationSeconds(currentPart.value),
+      timerRemoteUrls: [...currentState.timerRemoteUrls],
+      timerShowClock: currentSettings.value?.timerShowClock,
       timerTextColor: currentSettings.value?.timerTextColor,
       timerTextSize: currentSettings.value?.timerTextSize,
       timerTimeOfDayDisplay: currentSettings.value?.timerTimeOfDayDisplay,
@@ -857,6 +863,27 @@ const createTimer = () => {
 
   const { toggleTimerWindow } = globalThis.electronApi;
 
+  // Keeps the speaker monitor on its assigned screen. The main process only
+  // remembers the window's last geometry, so the fixed assignment is
+  // reapplied each time the window is shown. A fullscreen timer is kept off
+  // the multimedia output, which it would otherwise cover.
+  const applySpeakerScreen = async () => {
+    try {
+      const screens = await globalThis.electronApi.getAllScreens();
+      const index = timerPreferences.value.preferredScreenNumber;
+      if (index === undefined) return;
+      const screen = screens[index];
+      if (!screen || screen.mainWindow) return;
+      const fullscreen = !timerPreferences.value.preferWindowed;
+      if (fullscreen && screen.mediaWindow) return;
+      globalThis.electronApi.moveTimerWindow(index, fullscreen);
+    } catch (error) {
+      errorCatcher(error, {
+        contexts: { fn: { name: 'applySpeakerScreen' } },
+      });
+    }
+  };
+
   const handleTimerWindowVisibility = (visible: boolean) => {
     toggleTimerWindow(visible);
     currentState.setTimerWindowVisible(visible);
@@ -866,6 +893,7 @@ const createTimer = () => {
       // running previously flashed the plain clock for one tick before the
       // next 500ms update self-corrected it.
       updateTimerWindow();
+      void applySpeakerScreen();
     }
   };
 

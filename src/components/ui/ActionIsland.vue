@@ -17,6 +17,7 @@
         <TimerButton v-model="timerPopup" />
         <q-separator class="bg-semi-white-24" vertical />
         <MediaDisplayButton v-model="displayPopup" />
+        <CameraScenesButton />
         <ZoomMeetingManagerButton v-model="zoomMeetingManagerPopup" />
       </div>
       <DialogDownloadsPopup v-model="downloadPopup" />
@@ -32,6 +33,7 @@
 
 <script setup lang="ts">
 import { whenever } from '@vueuse/core';
+import CameraScenesButton from 'components/media/CameraScenesButton.vue';
 import DownloadStatus from 'components/media/DownloadStatus.vue';
 import MediaDisplayButton from 'components/media/MediaDisplayButton.vue';
 import MusicButton from 'components/media/MusicButton.vue';

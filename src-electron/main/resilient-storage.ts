@@ -13,6 +13,7 @@ import {
 } from 'fs-extra/esm';
 import { renameSync } from 'node:fs';
 import { readdir, rename, stat } from 'node:fs/promises';
+import { PRODUCT_NAME } from 'src-electron/constants';
 import { addElectronBreadcrumb } from 'src-electron/main/utils';
 import { join } from 'upath';
 
@@ -86,7 +87,7 @@ function writeJsonAtomicSync(
  */
 let cachedFallbackDir: null | string = null;
 export function getFallbackDir(): string {
-  cachedFallbackDir ??= join(app.getPath('temp'), 'Meeting Media Manager');
+  cachedFallbackDir ??= join(app.getPath('temp'), PRODUCT_NAME || 'TM2');
   return cachedFallbackDir;
 }
 

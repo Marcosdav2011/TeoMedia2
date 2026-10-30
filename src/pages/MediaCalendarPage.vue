@@ -649,6 +649,22 @@ const pageBanners = computed(() => {
     textKey: string;
   }[] = [];
 
+  if (!currentSettings.value?.enableMediaDisplayButton) {
+    banners.push({
+      actions: [
+        {
+          labelKey: 'go-to-settings',
+          onClick: () => void router.push('/settings/enableMediaDisplayButton'),
+        },
+      ],
+      avatarClass: 'bg-white text-warning',
+      className: 'bg-warning text-white full-width',
+      icon: 'mmm-media-display-inactive',
+      key: 'media-playback-disabled',
+      textKey: 'media-playback-disabled-banner',
+    });
+  }
+
   if (showObsBanner.value) {
     banners.push({
       className: 'bg-negative text-white full-width',
@@ -2426,6 +2442,7 @@ const showEmptyState = computed(() => {
 // Banner column management for transitions
 const shouldShowBannerColumn = computed(
   () =>
+    !currentSettings.value?.enableMediaDisplayButton ||
     showObsBanner.value || // NOSONAR: boolean OR, false falls through
     showObsSceneListErrorBanner.value || // NOSONAR: boolean OR, false falls through
     someItemsHiddenForSelectedDate.value ||

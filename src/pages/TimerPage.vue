@@ -168,6 +168,32 @@
     >
       {{ aheadBehindText }}
     </div>
+
+    <!-- Time of day while the chronometer owns the big display. -->
+    <div v-if="showCornerClock" class="speaker-corner-clock">
+      {{ speakerClockTime }}
+    </div>
+
+    <!-- Ad-hoc message from the operator to whoever watches this display. -->
+    <transition name="q-transition--fade">
+      <div v-if="timerData?.speakerNotice" class="speaker-notice">
+        {{ timerData.speakerNotice }}
+      </div>
+    </transition>
+
+    <!-- Where to open this same display on a tablet at the lectern. Shown
+         while no part is being timed, so it never shares the display with
+         the part's time. -->
+    <div v-if="showTimerRemoteAddress" class="timer-remote-address">
+      <div class="timer-remote-address__label">{{ t('timer-remote') }}</div>
+      <div
+        v-for="url in timerRemoteUrls"
+        :key="url"
+        class="timer-remote-address__url"
+      >
+        {{ url }}
+      </div>
+    </div>
   </q-page-container>
 </template>
 
@@ -185,6 +211,7 @@ const displayTime = ref<string>('');
 const paused = ref<boolean>(false);
 const currentDate = ref(new Date());
 const currentTime = ref<string>('');
+const speakerClockTime = ref<string>('');
 const meetingCountdownRemainingSeconds = ref<null | number>(null);
 const meetingCountdownTargetSeconds = ref<null | number>(null);
 const clockTicks = Array.from({ length: 12 }, (_, index) => index);
@@ -276,6 +303,19 @@ const displayLabel = computed(() => {
   }
   return '';
 });
+
+// While a part is being timed the big display shows the chronometer, so the
+// time of day is repeated in a corner. In clock mode it already is the big
+// display, and the corner copy would just duplicate it.
+const showCornerClock = computed(
+  () => !!timerData.value?.timerShowClock && currentMode.value !== 'clock',
+);
+
+const timerRemoteUrls = computed(() => timerData.value?.timerRemoteUrls ?? []);
+
+const showTimerRemoteAddress = computed(
+  () => !timerData.value?.running && timerRemoteUrls.value.length > 0,
+);
 
 // Check if timer is overtime
 const isOvertime = computed(() => {
@@ -549,6 +589,15 @@ const updateTime = () => {
   }
 };
 
+// The big display's clock is paused while a plain chronometer runs, so the
+// corner clock keeps its own tick to stay live.
+const updateSpeakerClock = () => {
+  speakerClockTime.value = formatTime(new Date());
+};
+
+useIntervalFn(updateSpeakerClock, 1000);
+updateSpeakerClock();
+
 // Return countdown string or null if not active
 const getMeetingCountdown = (
   now: Date,
@@ -737,6 +786,68 @@ watch(isClockArcDisplay, (showing) => {
 
 .ahead-behind-overlay {
   z-index: 10;
+}
+
+.speaker-corner-clock {
+  background: rgb(0 0 0 / 55%);
+  border-radius: 0.6vh;
+  color: #ffffff;
+  font-size: clamp(1rem, 3.2vh, 2.4rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding: 0.25em 0.7em;
+  position: absolute;
+  right: 2vh;
+  top: 2vh;
+  z-index: 25;
+}
+
+.timer-remote-address {
+  background: rgb(0 0 0 / 45%);
+  border-radius: 0.6vh;
+  bottom: 1.5vh;
+  color: rgb(255 255 255 / 60%);
+  display: flex;
+  flex-direction: column;
+  font-size: clamp(0.65rem, 1.6vh, 1rem);
+  gap: 0.15em;
+  left: 2vh;
+  max-width: 46vw;
+  padding: 0.4em 0.8em;
+  position: absolute;
+  z-index: 25;
+}
+
+.timer-remote-address__label {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.timer-remote-address__url {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.speaker-notice {
+  background: #c62828;
+  border-radius: 1vh;
+  bottom: 6vh;
+  box-shadow: 0 0 2vh rgb(0 0 0 / 45%);
+  color: #ffffff;
+  font-size: clamp(1.4rem, 5vh, 4.5rem);
+  font-weight: 700;
+  left: 50%;
+  line-height: 1.2;
+  max-width: 92vw;
+  padding: 0.5em 1.2em;
+  position: absolute;
+  text-align: center;
+  transform: translateX(-50%);
+  white-space: pre-line;
+  z-index: 30;
 }
 
 .timer-display {

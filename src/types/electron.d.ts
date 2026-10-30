@@ -32,6 +32,21 @@ import type {
 
 import type { TimerData } from './timer';
 
+/** A window or screen offered by the capture panel. */
+export interface CaptureSource {
+  /**
+   * Electron Display id behind a screen source; empty for windows. Lets the
+   * panel warn when the picked screen is the one showing the output.
+   */
+  displayId: string;
+  /** desktopCapturer source id, passed back to getUserMedia. */
+  id: string;
+  name: string;
+  /** PNG data URL, or empty when the thumbnail couldn't be read. */
+  thumbnail: string;
+  type: 'screen' | 'window';
+}
+
 export interface ConversionOptions {
   /**
    * the HEIC file buffer
@@ -183,6 +198,8 @@ export interface ElectronApi {
   getAllScreens: () => Promise<Display[]>;
   getAppDataPath: () => Promise<string>;
   getBetaUpdatesPath: () => Promise<string>;
+  /** Windows and screens available to project, for the capture panel. */
+  getCaptureSources: () => Promise<CaptureSource[]>;
   getLocales: () => Promise<string[]>;
   getLocalPathFromFileObject: (fileObject: File | string | undefined) => string;
   getLowDiskSpaceStatus: () => Promise<boolean>;
@@ -556,6 +573,7 @@ export type ElectronIpcInvokeKey =
   | 'getAllScreens'
   | 'getAppDataPath'
   | 'getBetaUpdatesPath'
+  | 'getCaptureSources'
   | 'getLocales'
   | 'getLowDiskSpaceStatus'
   | 'getMediaWindowCaptureSize'

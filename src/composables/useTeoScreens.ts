@@ -9,7 +9,7 @@ import { withTimeout } from 'src/utils/general';
 import { useAppSettingsStore } from 'stores/app-settings';
 import { useCurrentStateStore } from 'stores/current-state';
 import { useTeoCameraStore } from 'stores/teo-camera';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const SCREEN_FETCH_TIMEOUT_MS = 5000;
@@ -34,6 +34,7 @@ export const useTeoScreens = () => {
   const screens = ref<Display[]>([]);
   const loading = ref(false);
   let fetching = false;
+  let identifyRestoreTimer: ReturnType<typeof setTimeout> | undefined;
 
   const outputScreens = computed(() =>
     screens.value
@@ -87,6 +88,26 @@ export const useTeoScreens = () => {
     () => auxiliaryScreenIndex.value !== null,
   );
 
+  /**
+   * The screen the camera opens on. It is assigned separately from the
+   * multimedia screen in the display settings, so both can stay fixed across
+   * sessions. Until the user assigns one, the camera uses the other external
+   * screen (or the only output screen).
+   */
+  const cameraScreenIndex = computed(() => {
+    const available = outputScreens.value;
+    if (!available.length) return null;
+
+    const configured = available.find(
+      ({ index }) => index === teoCamera.preferredCameraScreen,
+    );
+    return (
+      configured?.index ??
+      auxiliaryScreenIndex.value ??
+      preferredScreenIndex.value
+    );
+  });
+
   const screenNumber = (index: number) =>
     screens.value[index]?.displayNumber ?? index + 1;
 
@@ -121,6 +142,25 @@ export const useTeoScreens = () => {
     if (!screen || screen.mainWindow) return;
     screenPreferences.value.preferredScreenNumber = index;
     teoCamera.preferredOutputScreen = index;
+  };
+
+  /**
+   * Persists the camera screen without touching the multimedia assignment.
+   * A running camera follows the new screen right away; media playback keeps
+   * its own screen and the camera returns here when playback ends.
+   */
+  const setCameraScreen = (index: null | number) => {
+    if (index === null) return;
+    const screen = screens.value[index];
+    if (!screen || screen.mainWindow) return;
+
+    teoCamera.preferredCameraScreen = index;
+    if (!teoCamera.activeCameraId) return;
+
+    teoCamera.setActiveScreen(index);
+    if (!currentState.mediaIsPlaying) {
+      globalThis.electronApi.moveMediaWindow(index, true);
+    }
   };
 
   /**
@@ -181,7 +221,7 @@ export const useTeoScreens = () => {
    */
   const activateOutput = (
     requestedIndex?: number,
-    options: { force?: boolean } = {},
+    options: { force?: boolean; persist?: boolean } = {},
   ) => {
     const index = requestedIndex ?? preferredScreenIndex.value;
     if (index === null) return null;
@@ -189,7 +229,7 @@ export const useTeoScreens = () => {
     const screen = screens.value[index];
     if (!screen || screen.mainWindow) return null;
 
-    setPreferredScreen(index);
+    if (options.persist !== false) setPreferredScreen(index);
 
     if (!options.force && isOutputActiveOnScreen(index)) return index;
 
@@ -214,12 +254,15 @@ export const useTeoScreens = () => {
     return index;
   };
 
-  const identifyScreen = (index: number) => {
+  const identifyScreen = (
+    index: number,
+    options: { persist?: boolean } = {},
+  ) => {
     const screen = screens.value[index];
     if (!screen || screen.mainWindow) return;
 
     screenPreferences.value.preferWindowed = false;
-    if (activateOutput(index) === null) return;
+    if (activateOutput(index, { persist: options.persist }) === null) return;
 
     if (teoCamera.activeCameraId) {
       teoCamera.setActiveScreen(index);
@@ -228,6 +271,19 @@ export const useTeoScreens = () => {
 
     if (currentState.mediaIsPlaying) return;
     postTeoScreenIdentify(identifyText(index));
+
+    // The identification is temporary. When it was shown on the camera screen
+    // without changing the multimedia assignment, hand the idle output back
+    // after the output window clears the number so the yeartext stays on the
+    // multimedia screen.
+    if (options.persist === false) {
+      if (identifyRestoreTimer) clearTimeout(identifyRestoreTimer);
+      identifyRestoreTimer = setTimeout(() => {
+        identifyRestoreTimer = undefined;
+        if (teoCamera.activeCameraId || currentState.mediaIsPlaying) return;
+        activateOutput();
+      }, 6500);
+    }
   };
 
   /**
@@ -280,10 +336,15 @@ export const useTeoScreens = () => {
     void fetchScreens();
   });
 
+  onUnmounted(() => {
+    if (identifyRestoreTimer) clearTimeout(identifyRestoreTimer);
+  });
+
   return {
     activateAuxiliaryOutput,
     activateOutput,
     auxiliaryScreenIndex,
+    cameraScreenIndex,
     fetchScreens,
     hasAuxiliaryScreen,
     hasOutputScreen,
@@ -297,6 +358,7 @@ export const useTeoScreens = () => {
     screenOptions,
     screens,
     selectScreen,
+    setCameraScreen,
     setPreferredScreen,
     showOutputWindow,
   };

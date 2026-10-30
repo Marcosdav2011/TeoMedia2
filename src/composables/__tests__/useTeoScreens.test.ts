@@ -18,10 +18,12 @@ vi.mock('src/helpers/mediaPlayback', () => ({
 
 vi.mock('src/helpers/teo-outputs', () => ({
   postTeoCamera: vi.fn(),
+  postTeoCameraLayout: vi.fn(),
+  postTeoCameraView: vi.fn(),
   postTeoScreenIdentify: vi.fn(),
 }));
 
-installPinia();
+installPinia({ stubActions: false });
 
 const getAllScreensMock = vi.fn<() => Promise<Display[]>>();
 const moveMediaWindowMock = vi.fn<ElectronApi['moveMediaWindow']>();
@@ -207,6 +209,56 @@ describe('useTeoScreens', () => {
     expect(teo.auxiliaryScreenIndex.value).toBeNull();
     expect(teo.activateAuxiliaryOutput()).toBeNull();
     expect(toggleAuxiliaryWindowMock).not.toHaveBeenCalled();
+  });
+
+  it('assigns the camera to the other external screen by default', async () => {
+    const { teo } = await mountComposable();
+
+    expect(teo.cameraScreenIndex.value).toBe(2);
+  });
+
+  it('keeps the camera screen separate from the multimedia screen', async () => {
+    const { teo } = await mountComposable();
+    const appSettings = useAppSettingsStore();
+    const teoCamera = useTeoCameraStore();
+
+    expect(teo.cameraScreenIndex.value).toBe(2);
+
+    teo.setCameraScreen(0);
+
+    expect(teoCamera.preferredCameraScreen).toBe(0);
+    expect(teoCamera.preferredOutputScreen).toBeNull();
+    expect(appSettings.screenPreferences.preferredScreenNumber).toBe(0);
+  });
+
+  it('moves a running camera to its new screen without touching media', async () => {
+    const { teo } = await mountComposable();
+    const teoCamera = useTeoCameraStore();
+    teoCamera.startCameraProjection('camera-1', 'USB Camera', 0);
+    vi.clearAllMocks();
+
+    teo.setCameraScreen(2);
+
+    expect(teoCamera.preferredCameraScreen).toBe(2);
+    expect(teoCamera.activeScreenIndex).toBe(2);
+    expect(moveMediaWindowMock).toHaveBeenCalledWith(2, true);
+
+    vi.clearAllMocks();
+    useCurrentStateStore().mediaPlaying.url = 'file:///media/video.mp4';
+    teo.setCameraScreen(0);
+
+    expect(teoCamera.activeScreenIndex).toBe(0);
+    expect(moveMediaWindowMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the only output screen when there is no second monitor', async () => {
+    getAllScreensMock.mockResolvedValue([
+      display(2, -1920, 0, 1920, 1080, false, 2),
+      display(1, 0, 0, 1920, 1080, true, 1),
+    ]);
+    const { teo } = await mountComposable();
+
+    expect(teo.cameraScreenIndex.value).toBe(0);
   });
 
   it('identifies the screen only while idle', async () => {

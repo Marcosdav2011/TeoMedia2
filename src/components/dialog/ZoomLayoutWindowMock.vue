@@ -2,7 +2,7 @@
   <div class="layout-mock" :class="`layout-mock--${kind}`">
     <div class="layout-mock__bar">
       <q-icon :name="kind === 'm3' ? 'mmm-logo' : 'mmm-video-meeting'" />
-      <span>{{ kind === 'm3' ? 'M³' : 'Zoom' }}</span>
+      <span>{{ kind === 'm3' ? 'TM2' : 'Zoom' }}</span>
     </div>
     <div v-if="kind === 'm3'" class="layout-mock__body">
       <div class="layout-mock__side"><i v-for="n in 4" :key="n" /></div>

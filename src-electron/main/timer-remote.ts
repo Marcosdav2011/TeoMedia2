@@ -31,16 +31,38 @@ export const isValidTimerRemotePort = (port: unknown): port is number =>
   port >= MIN_PORT &&
   port <= MAX_PORT;
 
+// Home and office networks first: those are the addresses a tablet at the
+// lectern can actually reach. Virtual adapters (VPNs, Hyper-V, Docker) usually
+// come before Wi-Fi in the OS list and only lead to a page that never loads.
+const PRIVATE_ADDRESS_PATTERNS = [
+  /^192\.168\./,
+  /^10\./,
+  /^172\.(?:1[6-9]|2\d|3[01])\./,
+];
+
+const isLinkLocal = (address: string) => address.startsWith('169.254.');
+
+const addressRank = (address: string) => {
+  const rank = PRIVATE_ADDRESS_PATTERNS.findIndex((pattern) =>
+    pattern.test(address),
+  );
+  return rank === -1 ? PRIVATE_ADDRESS_PATTERNS.length : rank;
+};
+
 /** The addresses the page can be opened at from other devices. */
 export const getTimerRemoteUrls = (port: number): string[] => {
-  const urls: string[] = [];
-  for (const addresses of Object.values(networkInterfaces())) {
-    for (const address of addresses ?? []) {
+  const addresses = new Set<string>();
+  for (const list of Object.values(networkInterfaces())) {
+    for (const address of list ?? []) {
       if (address.internal || address.family !== 'IPv4') continue;
-      urls.push(`http://${address.address}:${port}/`);
+      // Link-local only works over a directly connected cable.
+      if (isLinkLocal(address.address)) continue;
+      addresses.add(address.address);
     }
   }
-  return urls;
+  return [...addresses]
+    .sort((a, b) => addressRank(a) - addressRank(b) || a.localeCompare(b))
+    .map((address) => `http://${address}:${port}/`);
 };
 
 const PAGE_HTML = `<!doctype html>
@@ -50,7 +72,7 @@ const PAGE_HTML = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Timer - M³</title>
+<title>Timer - TM2</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -62,6 +84,8 @@ const PAGE_HTML = `<!doctype html>
     <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M22 58c-5 0-9-3-11-7L4 36c-1-3 1-6 4-6s4 2 5 4l4 8V12c0-2 2-4 4-4s4 2 4 4v18h2V7c0-2 2-4 4-4s4 2 4 4v23h2V10c0-2 2-4 4-4s4 2 4 4v20h2V17c0-2 2-4 4-4s4 2 4 4v27c0 8-6 14-14 14H22z"/></svg>
     <div id="handNames" class="hand-names"></div>
   </div>
+  <div id="clock" class="clock" hidden></div>
+  <div id="notice" class="notice" hidden></div>
   <div id="status" class="status" hidden></div>
 </main>
 <script src="/app.js"></script>
@@ -87,6 +111,8 @@ body { background: #000; color: #fff; font-family: -apple-system, "Segoe UI", Ro
 .hand-names:empty { display: none; }
 @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .75; transform: scale(.94); } }
 .status { background: rgba(255,255,255,.12); border-radius: 999px; bottom: 2vh; font-size: clamp(0.8rem, 2.5vw, 1.2rem); left: 50%; padding: .4em 1.2em; position: absolute; transform: translateX(-50%); }
+.clock { background: rgba(0,0,0,.55); border-radius: .6vh; font-size: clamp(1rem, 3.2vh, 2.4rem); font-variant-numeric: tabular-nums; font-weight: 600; padding: .25em .7em; position: absolute; right: 2vh; top: 2vh; }
+.notice { background: #c62828; border-radius: 1vh; bottom: 8vh; box-shadow: 0 0 2vh rgba(0,0,0,.45); color: #fff; font-size: clamp(1.4rem, 5vh, 4.5rem); font-weight: 700; left: 50%; line-height: 1.2; max-width: 92vw; padding: .5em 1.2em; position: absolute; text-align: center; transform: translateX(-50%); white-space: pre-line; z-index: 2; }
 `;
 
 // Plain script (no build step): the same display rules as the timer window.
@@ -101,6 +127,8 @@ const PAGE_JS = String.raw`(function () {
     caption: document.getElementById('caption'),
     hand: document.getElementById('hand'),
     handNames: document.getElementById('handNames'),
+    clock: document.getElementById('clock'),
+    notice: document.getElementById('notice'),
     status: document.getElementById('status')
   };
   var text = {};
@@ -140,13 +168,14 @@ const PAGE_JS = String.raw`(function () {
     el.display.style.backgroundColor = (useOvertime ? data.timerOvertimeBackgroundColor : data && data.timerBackgroundColor) || '#000';
     el.display.style.color = (useOvertime ? data.timerOvertimeTextColor : data && data.timerTextColor) || '#fff';
     var blink = running && (data.paused || (overtime && data.timerOvertimeAnimation));
+    var countdown = null;
     el.time.className = 'time' + (blink ? ' blink' : '');
     if (running) {
       el.label.textContent = data.timerCurrentPartLabel || '';
       el.time.textContent = data.time || '';
       el.caption.textContent = data.paused ? (text.paused || '') : (data.mode === 'countup' ? (text.elapsed || '') : (text.remaining || ''));
     } else {
-      var countdown = meetingCountdown(now);
+      countdown = meetingCountdown(now);
       if (countdown !== null) {
         el.label.textContent = text.meetingStartsIn || '';
         el.time.textContent = formatCountdown(countdown);
@@ -157,6 +186,12 @@ const PAGE_JS = String.raw`(function () {
         el.caption.textContent = '';
       }
     }
+    var showClock = !!(data && data.timerShowClock) && (running || countdown !== null);
+    el.clock.hidden = !showClock;
+    el.clock.textContent = showClock ? formatTime(now) : '';
+    var notice = (data && data.speakerNotice) || '';
+    el.notice.hidden = !notice;
+    el.notice.textContent = notice;
     var hand = !!(data && data.handAlertActive);
     el.hand.hidden = !hand;
     el.handNames.textContent = hand && data.handAlertNames ? data.handAlertNames.join(' \u00B7 ') : '';

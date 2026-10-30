@@ -11,6 +11,7 @@ import {
   screen,
   shell,
 } from 'electron';
+import { existsSync } from 'node:fs';
 import {
   APP_ID,
   IS_DEMO_MODE,
@@ -206,16 +207,28 @@ function configureAppDataPaths() {
   if (process.env.PORTABLE_EXECUTABLE_DIR) {
     const portableExecutableDir = resolve(process.env.PORTABLE_EXECUTABLE_DIR);
     app.setPath('appData', portableExecutableDir);
-    app.setPath(
-      'userData',
-      join(portableExecutableDir, `${PRODUCT_NAME} - User Data`),
+    const userDataPath = join(
+      portableExecutableDir,
+      `${PRODUCT_NAME} - User Data`,
     );
+    app.setPath('userData', userDataPath);
     app.setPath(
       'temp',
       join(portableExecutableDir, `${PRODUCT_NAME} - Temporary Files`),
     );
-  } else if (IS_TEST && PRODUCT_NAME) {
-    app.setPath('userData', join(app.getPath('appData'), PRODUCT_NAME));
+    // Profiles created before the TM2 rename stay usable.
+    useLegacyUserDataIfNeeded(
+      userDataPath,
+      join(portableExecutableDir, 'Meeting Media Manager - User Data'),
+    );
+  } else {
+    if (IS_TEST && PRODUCT_NAME) {
+      app.setPath('userData', join(app.getPath('appData'), PRODUCT_NAME));
+    }
+    useLegacyUserDataIfNeeded(
+      app.getPath('userData'),
+      join(app.getPath('appData'), 'Meeting Media Manager'),
+    );
   }
 }
 
@@ -739,6 +752,15 @@ function setHwAccelDisabled(disabled: boolean, temporary = false) {
     }
   } catch (error) {
     log('Failed to write hw accel setting:', 'electron', 'warn', error);
+  }
+}
+
+function useLegacyUserDataIfNeeded(
+  userDataPath: string,
+  legacyUserDataPath: string,
+) {
+  if (!existsSync(userDataPath) && existsSync(legacyUserDataPath)) {
+    app.setPath('userData', legacyUserDataPath);
   }
 }
 

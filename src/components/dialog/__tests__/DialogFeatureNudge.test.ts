@@ -162,7 +162,7 @@ describe('DialogFeatureNudge', () => {
 
     expect(answers()?.responses.obs?.response).toBe('snoozed');
     expect(createTemporaryNotification).toHaveBeenCalledWith({
-      message: 'No problem, M³ will remind you about this later.',
+      message: 'No problem, TM2 will remind you about this later.',
     });
     expect(text()).not.toContain('Did you know?');
   });
@@ -184,7 +184,7 @@ describe('DialogFeatureNudge', () => {
 
     expect(answers()?.responses.obs?.response).toBe('declined');
     expect(createTemporaryNotification).toHaveBeenCalledWith({
-      message: "Got it, M³ won't suggest this again.",
+      message: "Got it, TM2 won't suggest this again.",
     });
   });
 
@@ -204,7 +204,7 @@ describe('DialogFeatureNudge', () => {
     await mountNudge({ windows: true });
     await wait(FIRST_TRY_MS);
 
-    expect(text()).toContain('Let M³ take care of Zoom');
+    expect(text()).toContain('Let TM2 take care of Zoom');
     expect(text()).toContain('Beta');
     await click('Set it up');
 

@@ -35,7 +35,7 @@
                     fullscreen: true,
                   },
                 );
-                moveMediaWindow(screenPreferences.preferredScreenNumber, true);
+                moveMediaWindow(windowScreenIndex, true);
               }
             "
           />
@@ -69,12 +69,68 @@
                     fullscreen: false,
                   },
                 );
-                moveMediaWindow(screenPreferences.preferredScreenNumber, false);
+                moveMediaWindow(windowScreenIndex, false);
               }
             "
           />
         </div>
       </div>
+      <template v-if="screenRoleOptions.length">
+        <q-separator class="bg-accent-200 q-my-sm" />
+        <p class="card-section-title text-dark-grey q-px-md q-pt-sm">
+          {{ t('teo-screen-roles') }}
+        </p>
+        <div class="column q-gutter-sm q-px-md q-pb-sm">
+          <q-select
+            v-model="mediaScreenModel"
+            dense
+            emit-value
+            :label="t('teo-screen-role-media')"
+            map-options
+            option-label="label"
+            option-value="value"
+            :options="screenRoleOptions"
+            outlined
+          >
+            <template #prepend>
+              <q-icon name="mmm-media-display-active" />
+            </template>
+          </q-select>
+          <q-select
+            v-model="cameraScreenModel"
+            dense
+            emit-value
+            :label="t('teo-screen-role-camera')"
+            map-options
+            option-label="label"
+            option-value="value"
+            :options="screenRoleOptions"
+            outlined
+          >
+            <template #prepend>
+              <q-icon name="mmm-video" />
+            </template>
+          </q-select>
+          <q-select
+            v-model="speakerScreenModel"
+            dense
+            emit-value
+            :label="t('teo-screen-role-speaker')"
+            map-options
+            option-label="label"
+            option-value="value"
+            :options="screenRoleOptions"
+            outlined
+          >
+            <template #prepend>
+              <q-icon name="mmm-alarm" />
+            </template>
+          </q-select>
+          <div class="text-body2 text-dark-grey">
+            {{ t('teo-screen-roles-hint') }}
+          </div>
+        </div>
+      </template>
       <q-separator class="bg-accent-200 q-my-sm" />
       <template
         v-if="!screenPreferences.preferWindowed && screenList?.length > 2"
@@ -123,26 +179,7 @@
                   borderRadius: '6px',
                 }"
                 unelevated
-                @click="
-                  () => {
-                    if (screen.mainWindow) return;
-                    log(
-                      '🔍 [Screen Map] Clicked for index:',
-                      'display',
-                      'log',
-                      index,
-                    );
-                    screenPreferences.preferredScreenNumber = index;
-                    const isFullscreen = !screenPreferences.preferWindowed;
-                    log(
-                      '🔍 [Screen Map] Calling moveMediaWindow with:',
-                      'display',
-                      'log',
-                      { index, isFullscreen },
-                    );
-                    moveMediaWindow(index, isFullscreen);
-                  }
-                "
+                @click="selectMediaScreenFromMap(index)"
               >
                 <q-tooltip v-if="screen.mainWindow" :delay="1000">
                   {{ t('main-window-is-on-this-screen') }}
@@ -345,6 +382,7 @@ import { isImage, isJwpub } from 'src/utils/media';
 import { findDb } from 'src/utils/sqlite';
 import { useAppSettingsStore } from 'stores/app-settings';
 import { useCurrentStateStore } from 'stores/current-state';
+import { useTeoCameraStore } from 'stores/teo-camera';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
@@ -353,9 +391,11 @@ const { t } = useI18n();
 const screenList = ref<Display[]>([]);
 
 const appSettings = useAppSettingsStore();
-const { displayCameraId, screenPreferences } = storeToRefs(appSettings);
+const { displayCameraId, screenPreferences, timerPreferences } =
+  storeToRefs(appSettings);
 
 const currentState = useCurrentStateStore();
+const teoCamera = useTeoCameraStore();
 const {
   currentCongregation,
   currentLangObject,
@@ -363,6 +403,7 @@ const {
   mediaWindowCustomBackground,
   mediaWindowVisible,
   selectedDate,
+  timerWindowVisible,
 } = storeToRefs(currentState);
 
 const props = defineProps<{
@@ -377,6 +418,7 @@ const {
   getAllScreens,
   join,
   moveMediaWindow,
+  moveTimerWindow,
   openFileDialog,
   pathToFileURL,
 } = globalThis.electronApi;
@@ -403,6 +445,125 @@ const statusIcon = computed(() =>
 const statusColor = computed(() =>
   mediaWindowVisible.value ? 'positive' : 'grey',
 );
+
+// Fixed screen roles: the multimedia screen shows the yeartext and media
+// whenever the camera is not projecting, and the camera screen hosts the
+// camera. Both assignments are persisted separately, so they stay put across
+// restarts and monitor changes.
+const outputScreens = computed(() =>
+  screenList.value
+    .map((screen, index) => ({ index, screen }))
+    .filter(({ screen }) => !screen.mainWindow),
+);
+
+const isOutputScreen = (index: null | number | undefined): index is number =>
+  typeof index === 'number' &&
+  !!screenList.value[index] &&
+  !screenList.value[index]?.mainWindow;
+
+const defaultMediaScreenIndex = computed(() => {
+  const available = outputScreens.value;
+  if (!available.length) return null;
+  return (
+    available.find(({ screen }) => screen.displayNumber === 2)?.index ??
+    available[0]?.index ??
+    null
+  );
+});
+
+const mediaScreenIndex = computed<null | number>(() => {
+  const configured = screenPreferences.value.preferredScreenNumber;
+  if (isOutputScreen(configured)) return configured;
+  return defaultMediaScreenIndex.value;
+});
+
+const cameraScreenIndex = computed<null | number>(() => {
+  const configured = teoCamera.preferredCameraScreen;
+  if (isOutputScreen(configured)) return configured;
+  const other = outputScreens.value.find(
+    ({ index }) => index !== mediaScreenIndex.value,
+  );
+  return other?.index ?? mediaScreenIndex.value;
+});
+
+// The speaker monitor (timer window) gets its own screen too. Falls back to
+// the first screen that is neither the multimedia nor the camera screen.
+const speakerScreenIndex = computed<null | number>(() => {
+  const configured = timerPreferences.value.preferredScreenNumber;
+  if (isOutputScreen(configured)) return configured;
+  const other = outputScreens.value.find(
+    ({ index }) =>
+      index !== mediaScreenIndex.value && index !== cameraScreenIndex.value,
+  );
+  return other?.index ?? cameraScreenIndex.value;
+});
+
+const screenRoleOptions = computed(() =>
+  outputScreens.value.map(({ index, screen }) => ({
+    label: `${t('teo-screen', {
+      number: screen.displayNumber ?? index + 1,
+    })} · ${screen.bounds.width} × ${screen.bounds.height}`,
+    value: index,
+  })),
+);
+
+const mediaScreenModel = computed({
+  get: () => mediaScreenIndex.value,
+  set: (index: null | number) => {
+    if (!isOutputScreen(index)) return;
+    screenPreferences.value.preferredScreenNumber = index;
+    teoCamera.preferredOutputScreen = index;
+    // While a camera is projecting, the output window belongs to the camera
+    // screen; this assignment applies as soon as the camera stops.
+    if (teoCamera.activeCameraId && !currentState.mediaIsPlaying) return;
+    moveMediaWindow(index, !screenPreferences.value.preferWindowed);
+  },
+});
+
+const cameraScreenModel = computed({
+  get: () => cameraScreenIndex.value,
+  set: (index: null | number) => {
+    if (!isOutputScreen(index)) return;
+    teoCamera.preferredCameraScreen = index;
+    if (!teoCamera.activeCameraId) return;
+    teoCamera.setActiveScreen(index);
+    if (!currentState.mediaIsPlaying) moveMediaWindow(index, true);
+  },
+});
+
+const speakerScreenModel = computed({
+  get: () => speakerScreenIndex.value,
+  set: (index: null | number) => {
+    if (!isOutputScreen(index)) return;
+    timerPreferences.value.preferredScreenNumber = index;
+    if (!timerWindowVisible.value) return;
+    moveTimerWindow(index, !timerPreferences.value.preferWindowed);
+  },
+});
+
+// The fullscreen/windowed buttons must not pull a projecting camera back to
+// the multimedia screen.
+const windowScreenIndex = computed<number | undefined>(() => {
+  const activeCameraScreen = teoCamera.activeScreenIndex;
+  if (
+    teoCamera.activeCameraId &&
+    !currentState.mediaIsPlaying &&
+    activeCameraScreen !== null
+  ) {
+    return activeCameraScreen;
+  }
+  return mediaScreenIndex.value ?? undefined;
+});
+
+const selectMediaScreenFromMap = (index: number) => {
+  if (!isOutputScreen(index)) return;
+  screenPreferences.value.preferredScreenNumber = index;
+  teoCamera.preferredOutputScreen = index;
+  if (teoCamera.activeCameraId && !currentState.mediaIsPlaying) {
+    teoCamera.setActiveScreen(index);
+  }
+  moveMediaWindow(index, !screenPreferences.value.preferWindowed);
+};
 
 const getBasename = (filename: string) => {
   if (!filename) return '';

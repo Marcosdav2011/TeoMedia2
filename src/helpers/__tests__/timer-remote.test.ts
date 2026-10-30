@@ -109,6 +109,8 @@ describe('syncTimerRemote', () => {
     await syncTimerRemote();
     expect(electronApi.stopTimerRemote).toHaveBeenCalledTimes(1);
     expect(useCurrentStateStore().timerRemoteUrls).toEqual([]);
+    // The display drops the address it was showing.
+    expect(updateTimerWindow).toHaveBeenCalled();
   });
 
   it('tells the user when the port is taken', async () => {
